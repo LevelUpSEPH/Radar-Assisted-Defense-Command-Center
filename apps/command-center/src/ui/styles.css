@@ -428,3 +428,9 @@ button.link:hover:not(:disabled) {
   color: var(--warn);
   border-color: color-mix(in srgb, var(--warn) 40%, transparent);
 }
+
+.decision {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}

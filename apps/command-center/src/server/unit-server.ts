@@ -14,6 +14,8 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { Registry, RegisterResult } from "./registry";
 
 export interface UnitServer {
+  /** Tells a pending unit it was approved. */
+  confirmRegistered(connId: string, unitId: string): void;
   /** Tells the unit why and closes its connection (e.g. its key was deleted). */
   disconnect(connId: string, why: "revoked" | RejectReason): void;
   close(): Promise<void>;
@@ -128,6 +130,10 @@ export function startUnitServer(
   wss.on("listening", () => console.log(`[units] listening on ws://localhost:${port}`));
 
   return {
+    confirmRegistered: (connId, unitId) => {
+      const ws = sockets.get(connId);
+      if (ws) answerRegistration(ws, { kind: "registered", unitId });
+    },
     disconnect: (connId, why) => {
       const ws = sockets.get(connId);
       if (!ws) return;

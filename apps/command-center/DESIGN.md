@@ -1,6 +1,6 @@
 # Command Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) and piece 3 (units register with keys, heartbeats, units list and map markers) done. Next: approving or rejecting pending units.
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) piece 3 (units register with keys, heartbeats, units list and map markers) and piece 4 (approve or reject pending units) done.
 
 The Command Center is the brain of the network. It registers radars and weapons, builds one picture of the sky from all radar reports, decides what is an enemy, and tells weapons when to prepare and fire. It never sees ground truth and **never connects to the World Simulator**: everything it knows comes from radar and weapon reports.
 
@@ -57,7 +57,8 @@ All keys are created in the Command Center UI.
 1. The operator generates a key with unit type, name and an **approximate position**.
 2. When the device connects with that key, the Command Center compares the reported position with the approximate one.
 3. Within `MANUAL_MATCH_TOLERANCE_M` (2 km): accepted and bound. The unit's reported position is used from then on.
-4. Outside the tolerance: the Command Center replies `pending { POSITION_MISMATCH, distanceM }`. The unit stays connected, but gets no tasks and its reports are ignored. The operator **approves** (binds it) or **rejects** it (`rejected { REJECTED_BY_OPERATOR }`, disconnected, key stays `ISSUED`).
+4. Outside the tolerance: the Command Center replies `pending { POSITION_MISMATCH, distanceM }`. The unit stays connected, but gets no tasks and its reports are ignored. The operator **approves** (binds it where it actually is, and it gets `registered`) or **rejects** it (`rejected { REJECTED_BY_OPERATOR }`, disconnected, key stays `ISSUED` so the right device can still use it).
+5. Once a manual key is bound, the 2 km check on later connections is against the unit's **last accepted position**, so an approved unit can reconnect from the same spot; moving 2 km or more from there makes it pending again.
 
 ### Rules for both modes
 

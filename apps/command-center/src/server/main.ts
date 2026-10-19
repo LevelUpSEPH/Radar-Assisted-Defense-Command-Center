@@ -63,6 +63,18 @@ async function main() {
         console.log(`[keys] deleted ${msg.payload.key}`);
         break;
       }
+      case "approveUnit": {
+        const { connId, unitId } = registry.approve(msg.payload.key, Date.now());
+        units.confirmRegistered(connId, unitId);
+        await save();
+        console.log(`[units] operator approved ${msg.payload.key} as ${unitId}`);
+        break;
+      }
+      case "rejectUnit": {
+        units.disconnect(registry.reject(msg.payload.key), "REJECTED_BY_OPERATOR");
+        console.log(`[units] operator rejected ${msg.payload.key}`);
+        break;
+      }
     }
     ui?.publish();
   };

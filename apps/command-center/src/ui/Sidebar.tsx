@@ -26,7 +26,7 @@ export function Sidebar({ cc }: { cc: CommandSocket }) {
         </div>
       )}
 
-      <UnitsPanel units={state?.units ?? []} />
+      <UnitsPanel units={state?.units ?? []} disabled={!connected} send={send} />
 
       <KeysPanel keys={state?.keys ?? []} disabled={!connected} send={send} />
     </aside>

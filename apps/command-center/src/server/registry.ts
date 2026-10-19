@@ -93,9 +93,16 @@ export class Registry {
     }
     if (this.connectionWithKey(key.key)) return { kind: "rejected", reason: "ALREADY_CONNECTED" };
 
-    // Manual keys: the unit must be where the operator said it would be.
-    if (key.mode === "manual" && key.expectedPosition) {
-      const off = distanceM(key.expectedPosition, req.position);
+    // Manual keys: the unit must be where the operator said it would be. Once
+    // a unit is accepted (directly or by approval), its accepted position is
+    // the reference, so an approved unit can reconnect from the same spot.
+    const reference = key.unitId
+      ? this.units.get(key.unitId)?.position
+      : key.mode === "manual"
+        ? key.expectedPosition
+        : undefined;
+    if (key.mode === "manual" && reference) {
+      const off = distanceM(reference, req.position);
       if (off > MANUAL_MATCH_TOLERANCE_M) {
         this.connections.set(connId, {
           kind: "pending",
@@ -144,6 +151,34 @@ export class Registry {
       const id = `${prefix}-${String(n).padStart(2, "0")}`;
       if (!this.units.has(id)) return id;
     }
+  }
+
+  // ------------------------------------------------------------- operator decisions
+
+  /**
+   * The operator accepts a pending unit: it is registered as if it had been
+   * in the right place. Returns its connection and new unit id.
+   */
+  approve(key: string, now: number): { connId: string; unitId: string } {
+    const connId = this.connectionWithKey(key);
+    const conn = connId ? this.connections.get(connId) : undefined;
+    if (!connId || conn?.kind !== "pending") throw new Error(`no pending unit with key ${key}`);
+    const unitId = this.bind(key, conn.request, now);
+    this.connections.set(connId, { kind: "registered", key, unitId, lastSeen: conn.lastSeen });
+    return { connId, unitId };
+  }
+
+  /**
+   * The operator turns a pending unit away. Its key stays ISSUED, so the
+   * right device can still use it. Returns the connection to close.
+   */
+  reject(key: string): string {
+    const connId = this.connectionWithKey(key);
+    if (!connId || this.connections.get(connId)?.kind !== "pending") {
+      throw new Error(`no pending unit with key ${key}`);
+    }
+    this.connections.delete(connId);
+    return connId;
   }
 
   // ------------------------------------------------------------- keys going away

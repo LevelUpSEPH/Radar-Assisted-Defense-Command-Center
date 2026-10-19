@@ -205,3 +205,65 @@ describe("deleting a key", () => {
     expect(registry.view()).toEqual([]);
   });
 });
+
+describe("operator decisions on pending units", () => {
+  const far = destination(here, 90, 6_000);
+  const pendingWeapon = () => {
+    const s = setup();
+    const k = s.keys.generate(
+      { mode: "manual", unitType: "weapon", name: "Battery Alpha", expectedPosition: here },
+      T0,
+    );
+    const { conn } = s.connectAndRegister(weapon(k.key, far));
+    return { ...s, key: k.key, conn };
+  };
+
+  it("approving registers the unit where it actually is", () => {
+    const { keys, registry, key, conn } = pendingWeapon();
+    expect(registry.approve(key, T0 + 1_000)).toEqual({ connId: conn, unitId: "WPN-01" });
+    expect(registry.unitOn(conn)).toBe("WPN-01");
+    expect(keys.get(key)).toMatchObject({ status: "BOUND", unitId: "WPN-01" });
+    expect(registry.view()).toEqual([
+      expect.objectContaining({ unitId: "WPN-01", status: "ONLINE", position: far }),
+    ]);
+  });
+
+  it("an approved unit reconnects from the same spot without approval", () => {
+    const { registry, key, conn, connectAndRegister } = pendingWeapon();
+    registry.approve(key, T0);
+    registry.disconnect(conn);
+    expect(connectAndRegister(weapon(key, far)).result).toEqual({
+      kind: "registered",
+      unitId: "WPN-01",
+    });
+  });
+
+  it("but moving 2 km+ from where it was approved makes it pending again", () => {
+    const { registry, key, conn, connectAndRegister } = pendingWeapon();
+    registry.approve(key, T0);
+    registry.disconnect(conn);
+    expect(connectAndRegister(weapon(key, destination(far, 0, 3_000))).result).toMatchObject({
+      kind: "pending",
+    });
+  });
+
+  it("rejecting drops the connection and keeps the key usable", () => {
+    const { keys, registry, key, conn, connectAndRegister } = pendingWeapon();
+    expect(registry.reject(key)).toBe(conn);
+    expect(registry.view()).toEqual([]);
+    expect(keys.get(key)!.status).toBe("ISSUED");
+    // The right device, in the right place, can still register with it.
+    expect(connectAndRegister(weapon(key, here)).result).toEqual({
+      kind: "registered",
+      unitId: "WPN-01",
+    });
+  });
+
+  it("refuses to approve or reject a key with no pending unit", () => {
+    const { keys, registry, connectAndRegister } = setup();
+    const k = keys.generate({ mode: "auto", unitType: "radar" }, T0);
+    expect(() => registry.approve(k.key, T0)).toThrow("no pending unit");
+    connectAndRegister(radar(k.key));
+    expect(() => registry.reject(k.key)).toThrow("no pending unit");
+  });
+});

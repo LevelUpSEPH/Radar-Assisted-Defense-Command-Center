@@ -95,5 +95,8 @@ export type ServerToUi = z.infer<typeof ServerToUiSchema>;
 export const UiToServerSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("generateKey"), payload: KeyRequestSchema }),
   z.object({ type: z.literal("deleteKey"), payload: z.object({ key: z.string() }) }),
+  /** Pending units are identified by their key (they have no unit id yet). */
+  z.object({ type: z.literal("approveUnit"), payload: z.object({ key: z.string() }) }),
+  z.object({ type: z.literal("rejectUnit"), payload: z.object({ key: z.string() }) }),
 ]);
 export type UiToServer = z.infer<typeof UiToServerSchema>;

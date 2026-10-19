@@ -1,8 +1,16 @@
-import type { UnitView } from "../protocol";
+import type { UiToServer, UnitView } from "../protocol";
 
 const km = (m: number) => `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} km`;
 
-export function UnitsPanel({ units }: { units: UnitView[] }) {
+export function UnitsPanel({
+  units,
+  disabled,
+  send,
+}: {
+  units: UnitView[];
+  disabled: boolean;
+  send(msg: UiToServer): void;
+}) {
   return (
     <section>
       <h2>Units</h2>
@@ -19,9 +27,28 @@ export function UnitsPanel({ units }: { units: UnitView[] }) {
                 </span>
                 <span className="muted small">{describe(u)}</span>
                 {u.status === "PENDING" && u.distanceM !== undefined && (
-                  <span className="warn small">
-                    Connected {km(u.distanceM)} from the key's position; waiting for approval.
-                  </span>
+                  <>
+                    <span className="warn small">
+                      Connected {km(u.distanceM)} from where it's expected; waiting for approval.
+                    </span>
+                    <span className="decision">
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => send({ type: "approveUnit", payload: { key: u.key } })}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={disabled}
+                        onClick={() => send({ type: "rejectUnit", payload: { key: u.key } })}
+                      >
+                        Reject
+                      </button>
+                    </span>
+                  </>
                 )}
               </div>
               <span className={`pill ${PILL[u.status]}`}>{u.status}</span>
