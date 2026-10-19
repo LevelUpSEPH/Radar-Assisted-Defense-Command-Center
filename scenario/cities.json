@@ -1,0 +1,23 @@
+{
+  "cities": [
+    {
+      "id": "zurich",
+      "name": "Zürich",
+      "position": { "lat": 47.3769, "lon": 8.5417 },
+      "radiusM": 8000
+    },
+    { "id": "bern", "name": "Bern", "position": { "lat": 46.948, "lon": 7.4474 }, "radiusM": 6000 },
+    {
+      "id": "basel",
+      "name": "Basel",
+      "position": { "lat": 47.5596, "lon": 7.5886 },
+      "radiusM": 6000
+    },
+    {
+      "id": "luzern",
+      "name": "Luzern",
+      "position": { "lat": 47.0502, "lon": 8.3093 },
+      "radiusM": 5000
+    }
+  ]
+}

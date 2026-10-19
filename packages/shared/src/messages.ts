@@ -223,7 +223,15 @@ export const DetectionSchema = z.object({
 export type Detection = z.infer<typeof DetectionSchema>;
 
 export const FromWorldSimSchema = z.discriminatedUnion("type", [
-  message("scanResult", z.object({ scanId: Id, detections: z.array(DetectionSchema) })),
+  message(
+    "scanResult",
+    z.object({
+      scanId: Id,
+      /** When the detected positions were true (the world's last tick), epoch ms. */
+      observedAt: EpochMs,
+      detections: z.array(DetectionSchema),
+    }),
+  ),
   message("cities", z.object({ cities: z.array(CitySchema) })),
 ]);
 

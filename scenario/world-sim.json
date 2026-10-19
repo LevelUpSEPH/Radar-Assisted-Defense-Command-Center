@@ -1,0 +1,6 @@
+{
+  "port": 7000,
+  "uiPort": 7001,
+  "citiesFile": "cities.json",
+  "wavesDir": "waves"
+}

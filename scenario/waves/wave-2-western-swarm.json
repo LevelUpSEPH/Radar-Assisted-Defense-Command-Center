@@ -1,0 +1,50 @@
+{
+  "name": "Western swarm",
+  "targets": [
+    {
+      "id": "d1",
+      "kind": "drone",
+      "spawnAtS": 0,
+      "start": { "lat": 46.8, "lon": 6.7 },
+      "destination": { "lat": 46.948, "lon": 7.4474 },
+      "speedMps": 110,
+      "altitudeM": 300
+    },
+    {
+      "id": "d2",
+      "kind": "drone",
+      "spawnAtS": 5,
+      "start": { "lat": 46.95, "lon": 6.65 },
+      "destination": { "lat": 46.948, "lon": 7.4474 },
+      "speedMps": 110,
+      "altitudeM": 300
+    },
+    {
+      "id": "d3",
+      "kind": "drone",
+      "spawnAtS": 10,
+      "start": { "lat": 47.1, "lon": 6.75 },
+      "destination": { "lat": 46.948, "lon": 7.4474 },
+      "speedMps": 110,
+      "altitudeM": 300
+    },
+    {
+      "id": "d4",
+      "kind": "drone",
+      "spawnAtS": 20,
+      "start": { "lat": 46.75, "lon": 7.0 },
+      "destination": { "lat": 47.0502, "lon": 8.3093 },
+      "speedMps": 120,
+      "altitudeM": 450
+    },
+    {
+      "id": "b1",
+      "kind": "bird",
+      "spawnAtS": 0,
+      "start": { "lat": 46.9, "lon": 7.1 },
+      "destination": { "lat": 46.98, "lon": 7.2 },
+      "speedMps": 11,
+      "altitudeM": 100
+    }
+  ]
+}

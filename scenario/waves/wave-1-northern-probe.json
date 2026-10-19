@@ -1,0 +1,59 @@
+{
+  "name": "Northern probe",
+  "targets": [
+    {
+      "id": "d1",
+      "kind": "drone",
+      "spawnAtS": 0,
+      "start": { "lat": 47.8, "lon": 8.7 },
+      "destination": { "lat": 47.3769, "lon": 8.5417 },
+      "speedMps": 100,
+      "altitudeM": 400
+    },
+    {
+      "id": "d2",
+      "kind": "drone",
+      "spawnAtS": 15,
+      "start": { "lat": 47.85, "lon": 8.2 },
+      "destination": { "lat": 47.3769, "lon": 8.5417 },
+      "speedMps": 100,
+      "altitudeM": 350
+    },
+    {
+      "id": "d3",
+      "kind": "drone",
+      "spawnAtS": 30,
+      "start": { "lat": 47.75, "lon": 7.9 },
+      "destination": { "lat": 47.5596, "lon": 7.5886 },
+      "speedMps": 90,
+      "altitudeM": 300
+    },
+    {
+      "id": "b1",
+      "kind": "bird",
+      "spawnAtS": 0,
+      "start": { "lat": 47.45, "lon": 8.3 },
+      "destination": { "lat": 47.5, "lon": 8.45 },
+      "speedMps": 12,
+      "altitudeM": 150
+    },
+    {
+      "id": "b2",
+      "kind": "bird",
+      "spawnAtS": 0,
+      "start": { "lat": 47.4, "lon": 8.7 },
+      "destination": { "lat": 47.35, "lon": 8.85 },
+      "speedMps": 10,
+      "altitudeM": 120
+    },
+    {
+      "id": "f1",
+      "kind": "friendly",
+      "spawnAtS": 5,
+      "start": { "lat": 46.95, "lon": 7.45 },
+      "destination": { "lat": 47.45, "lon": 8.55 },
+      "speedMps": 140,
+      "altitudeM": 1500
+    }
+  ]
+}

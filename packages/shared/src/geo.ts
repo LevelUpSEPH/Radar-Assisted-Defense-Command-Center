@@ -62,8 +62,14 @@ export function destination(from: LatLon, bearing: number, distM: number): LatLo
 }
 
 /**
+ * Within this distance of the goal counts as arrived, so floating-point drift
+ * over many small steps can't leave a mover a hair short forever.
+ */
+const ARRIVAL_TOLERANCE_M = 0.5;
+
+/**
  * Moves `distM` meters from `from` towards `to`. If that would reach or pass
- * `to`, returns `to` exactly and `arrived: true`.
+ * `to` (within ARRIVAL_TOLERANCE_M), returns `to` exactly and `arrived: true`.
  */
 export function moveTowards(
   from: LatLon,
@@ -71,7 +77,7 @@ export function moveTowards(
   distM: number,
 ): { position: LatLon; arrived: boolean } {
   const remaining = distanceM(from, to);
-  if (distM >= remaining) return { position: { ...to }, arrived: true };
+  if (distM >= remaining - ARRIVAL_TOLERANCE_M) return { position: { ...to }, arrived: true };
   return { position: destination(from, bearingDeg(from, to), distM), arrived: false };
 }
 
