@@ -8,7 +8,7 @@ export function App() {
     <div className="layout">
       <Sidebar world={world} />
       <main className="map-area">
-        <MapView cities={world.cities} state={world.state} />
+        <MapView view={world.view} state={world.state} />
       </main>
     </div>
   );

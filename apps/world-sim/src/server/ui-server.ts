@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { createServer as createViteServer } from "vite";
 import { WebSocketServer, type WebSocket } from "ws";
 import { UiToServerSchema, type ServerToUi, type WaveFileInfo, type WorldState } from "../protocol";
+import type { Config } from "./config";
 import { listWaveFiles, loadWave } from "./waves";
 import type { World } from "./world";
 
@@ -19,7 +20,7 @@ export interface UiServer {
 export async function startUiServer(
   port: number,
   world: World,
-  wavesDir: string,
+  { wavesDir, view }: Pick<Config, "wavesDir" | "view">,
 ): Promise<UiServer> {
   const http = createHttpServer();
   const vite = await createViteServer({
@@ -47,7 +48,7 @@ export async function startUiServer(
   wss.on("connection", async (ws) => {
     send(ws, {
       type: "init",
-      payload: { cities: [...world.cities], waveFiles: await waveFiles() },
+      payload: { view, waveFiles: await waveFiles() },
     });
 
     ws.on("message", async (data) => {

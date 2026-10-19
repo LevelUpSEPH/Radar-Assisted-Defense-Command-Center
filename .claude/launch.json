@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["node_modules/tsx/dist/cli.mjs", "apps/world-sim/src/server/main.ts"],
       "port": 7001
+    },
+    {
+      "name": "command-center",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/tsx/dist/cli.mjs", "apps/command-center/src/server/main.ts"],
+      "port": 7101
     }
   ]
 }

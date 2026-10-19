@@ -2,21 +2,20 @@
 
 Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 2 done**.
 
-The World Simulator stands in for the physical world. It owns the **ground truth**: where cities are, where every target really is, which shells are in the air, and what an impact destroys. It is the only program that knows a target's true kind and destination.
+The World Simulator stands in for the physical world. It owns the **ground truth**: where every target really is, what kind it is and where it is going.
 
-It is not part of the defense network: radars and weapons connect to it only to "sense" and to "fire", the way real devices interact with the world around them.
+It is not part of the defense network, and **only radars connect to it**: it is what radars see. The Command Center never talks to it, and weapons don't either. They shoot where they are told. The one way the network affects the world is a **hit**: when a weapon's shot arrives, the radar tracking that target tells the world to remove it.
 
 ---
 
 ## 1. Responsibilities
 
-- Load cities and wave files.
-- Spawn and move targets in real time.
+- Load wave files; spawn and move targets in real time.
 - Answer radar scans with what is physically within range.
-- Fly shells and resolve impacts.
+- Remove a target when a radar reports it was hit.
 - Show a "truth" map for comparing against what the Command Center believes.
 
-Not its job: tracking, classification, or deciding anything about engagements.
+Not its job: simulating shells, deciding whether a shot hits (a computed shot always hits), tracking, classification, or anything about engagements.
 
 ---
 
@@ -32,30 +31,28 @@ Config path defaults to `scenario/world-sim.json`; pass `-- --config <path>` to 
 {
   "port": 7000,
   "uiPort": 7001,
-  "citiesFile": "cities.json",
-  "wavesDir": "waves"
+  "wavesDir": "waves",
+  "view": { "center": { "lat": 47.2, "lon": 8.0 }, "zoom": 8 }
 }
 ```
 
-| Port     | What                                                    |
-| -------- | ------------------------------------------------------- |
-| `port`   | WebSocket for radars, weapons and the Command Center    |
-| `uiPort` | Truth map web page (`http://localhost:7001`) and its WS |
+| Setting    | What                                                    |
+| ---------- | ------------------------------------------------------- |
+| `port`     | WebSocket for radars                                    |
+| `uiPort`   | Truth map web page (`http://localhost:7001`) and its WS |
+| `wavesDir` | Folder of wave files                                    |
+| `view`     | Where the truth map starts (center, zoom)               |
 
 ---
 
 ## 3. World model
-
-### Cities
-
-From `citiesFile` (`CitiesFileSchema`). Each has an id, a name, a real position and a radius. Defining regions and cities from inside the program comes later; until then the file is edited by hand.
 
 ### Targets
 
 Each target in a wave file becomes a live target when its wave starts:
 
 - **Id:** `<run id>-<target id>`, e.g. `W2-t1`. Each started wave gets a run id `W1`, `W2`, …, so the same file can be started twice.
-- **Life cycle:** `SCHEDULED → FLYING → ARRIVED | DESTROYED`. A target spawns at `wave start + spawnAtS`, flies a great-circle line to its destination at constant speed, and is removed when it arrives or is destroyed.
+- **Life cycle:** `SCHEDULED → FLYING → ARRIVED | DESTROYED`. A target spawns at `wave start + spawnAtS`, flies a great-circle line to its destination at constant speed, and is removed when it arrives or is hit.
 - **Heading** is the bearing from its current position to its destination, updated every tick.
 - **Radar signature** is fixed at spawn from its kind, with ±0.05 random variation:
 
@@ -67,49 +64,46 @@ Each target in a wave file becomes a live target when its wave starts:
 
 ### Waves
 
-- Wave files live in `wavesDir` and follow `WaveFileSchema` (see the system design).
+- Wave files live in `wavesDir` and follow `WaveFileSchema` (see the system design). A destination is just a point; it isn't a city or a protected area.
 - The UI lists every file in the folder. The list is re-read on request, so new files appear without a restart. Invalid files are listed with their validation error.
 - Several waves can run at once. A wave run is **finished** when all its targets have arrived or been destroyed.
-- **Stop all** removes every target and shell immediately.
+- **Stop all** removes every target immediately.
 
-### Shells
+### Hits
 
-- A weapon sends `shell { shellId, from, impactPoint, firedAt, impactAt }`.
-- The shell is kept until `impactAt`. Its position in between is interpolated linearly along the great circle; it's only for display.
-- **At impact,** every flying target within `BLAST_RADIUS_M` of `impactPoint` **at the moment `impactAt`** is destroyed. To be exact, each target's position is extrapolated from the last tick to `impactAt`, so the 100 ms tick doesn't blur the result.
-- The impact is kept for 3 s for the UI blast effect, together with the ids it destroyed.
+- A radar sends `targetHit { truthId }` for an object it tracks, after the Command Center told it a weapon's shot arrived.
+- The target is removed as **destroyed**, and the kill is shown on the map for 3 s.
+- Several radars may track the same target and all report the hit; the first report removes it, the rest are ignored.
 
 ### Tick
 
 Every `WORLD_TICK_MS` (100 ms), in this order:
 
-1. Resolve shells whose `impactAt` has passed.
-2. Spawn scheduled targets whose time has come.
-3. Move flying targets. Mark arrivals.
-4. Mark finished wave runs.
-5. Push a state snapshot to connected UIs.
+1. Spawn scheduled targets whose time has come.
+2. Move flying targets. Mark arrivals.
+3. Mark finished wave runs.
+4. Push a state snapshot to connected UIs.
 
 The simulation logic is a plain class (`World`) driven by `tick(now)`, with no timers or sockets inside, so it can be unit-tested with a fake clock.
 
 ---
 
-## 4. Unit link (port 7000)
+## 4. Radar link (port 7000)
 
 Uses `ToWorldSimSchema` / `FromWorldSimSchema` from `@tdts/shared`.
 
-| Message                | Behavior                                                                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hello`                | Identifies the connection (unitId, type, position). Required before `scan` or `shell`; it's also what lets the truth map show units.        |
-| `scan` → `scanResult`  | Every **flying** target within `rangeM` of `position` (2D distance). Returns truthId, exact position, altitude, signature and IFF response. |
-| `shell`                | Accepted if `impactAt > firedAt`. An `impactAt` already in the past resolves on the next tick.                                              |
-| `getCities` → `cities` | The city list.                                                                                                                              |
-| anything invalid       | `error { code, detail }`; the connection stays open. Codes: `BAD_MESSAGE`, `NOT_IDENTIFIED`, `BAD_SHELL`.                                   |
+| Message               | Behavior                                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `hello`               | Identifies the radar (radarId, position, range). Required before anything else; it also puts the radar on the truth map.            |
+| `scan` → `scanResult` | Every **flying** target within `rangeM` of `position` (2D distance): truthId, exact position, altitude, signature and IFF response. |
+| `targetHit`           | Removes that target as destroyed (see Hits).                                                                                        |
+| anything invalid      | `error { code, detail }`; the connection stays open. Codes: `BAD_MESSAGE`, `NOT_IDENTIFIED`.                                        |
 
 Scan results are **exact**. Adding noise is the radar's job, so each radar can have its own noise level.
 
-Every `scanResult` carries `observedAt`: the time of the world tick its positions belong to. Radars must time-stamp observations with it, not with the time the reply arrived. Tick jitter (up to 100 ms) on a 1–2 s scan interval is otherwise a few percent of speed error, which is hundreds of meters at impact on a long shot. The first end-to-end test shot missed by exactly that.
+Every `scanResult` carries `observedAt`: the time of the world tick its positions belong to. Radars must time-stamp observations with it, not with the time the reply arrived. Tick jitter (up to 100 ms) on a 1–2 s scan interval is otherwise a few percent of speed error, which is hundreds of meters of aiming error on a long shot.
 
-Connected units are listed on the truth map; they are removed when their socket closes.
+Connected radars are listed on the truth map; they are removed when their socket closes.
 
 ---
 
@@ -119,32 +113,31 @@ A single page: a map, plus a sidebar.
 
 **Map**
 
-- Cities as circles of their radius, with names.
 - Targets as dots colored by true kind (drone red, friendly blue, bird amber), with a dashed line to their destination and a tooltip (id, kind, speed, altitude).
-- Connected radars and weapons as markers.
-- Shells as a line from launch to impact point, with a moving dot.
-- Impacts as a blast-radius circle that fades over 3 s.
+- Connected radars with their range circles.
+- Kills as an orange ring where the target was destroyed, fading over 3 s.
 
 **Sidebar**
 
-- **Waves:** each file with its name and target count (or its error), and a Start button. Refresh and Stop all buttons.
-- **Running waves:** run id, name, and counts (scheduled / flying / arrived / destroyed).
-- **Connected units.**
-- **Event log:** wave started/finished, target spawned/arrived/destroyed, shell fired/impact.
+- **Counters:** drones, friendlies and birds flying; total destroyed.
+- **Wave files:** each file with its name and target count (or its error), and a Start button. Refresh and Stop all buttons.
+- **Waves:** run id, name, and counts (waiting / flying / arrived / destroyed).
+- **Connected radars.**
+- **Event log:** wave started/finished, target appeared/arrived/destroyed.
 
 ### UI channel (`/ws` on the UI port)
 
 Defined in `src/protocol.ts`, private to this program. Messages are `{ type, payload }`.
 
-| Direction   | type           | payload                                                    |
-| ----------- | -------------- | ---------------------------------------------------------- |
-| server → UI | `init`         | cities, wave files                                         |
-| server → UI | `state`        | now, targets, shells, impacts, units, wave runs, event log |
-| server → UI | `waveFiles`    | wave files (after a refresh)                               |
-| server → UI | `error`        | detail                                                     |
-| UI → server | `startWave`    | file                                                       |
-| UI → server | `stopAll`      | —                                                          |
-| UI → server | `refreshWaves` | —                                                          |
+| Direction   | type           | payload                                           |
+| ----------- | -------------- | ------------------------------------------------- |
+| server → UI | `init`         | map view, wave files                              |
+| server → UI | `state`        | now, targets, kills, radars, wave runs, event log |
+| server → UI | `waveFiles`    | wave files (after a refresh)                      |
+| server → UI | `error`        | detail                                            |
+| UI → server | `startWave`    | file                                              |
+| UI → server | `stopAll`      | —                                                 |
+| UI → server | `refreshWaves` | —                                                 |
 
 `state` is sent every tick (10 Hz). It's the full picture, not a diff, which is simple and plenty fast at this scale.
 
@@ -164,7 +157,7 @@ apps/world-sim/
    │  ├─ config.ts         config file schema and loading
    │  ├─ world.ts          World: the simulation (pure, testable)
    │  ├─ waves.ts          listing and loading wave files
-   │  ├─ unit-server.ts    port 7000 WebSocket
+   │  ├─ radar-server.ts   port 7000 WebSocket (radars only)
    │  └─ ui-server.ts      HTTP + Vite + /ws for the UI
    └─ ui/                  React app: map + sidebar
 ```
@@ -173,9 +166,8 @@ apps/world-sim/
 
 ## 7. Tests
 
-`World` is tested with a fake clock: spawn timing, movement and arrival, scan range and contents, shell hits and near-misses, impact timing between ticks, wave-run completion, stop all.
+`World` is tested with a fake clock: spawn timing, movement and arrival, scan range and contents, hits (including duplicate reports and not-yet-spawned targets), kill display timing, wave-run completion, stop all.
 
 ## 8. Later
 
-- Define regions and cities from the World Simulator UI.
-- Optional: show each radar's range and each weapon's range rings (needs those values in `hello`).
+- Define regions (where things happen, the starting map view) from the World Simulator UI.

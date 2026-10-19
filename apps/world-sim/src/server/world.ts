@@ -2,21 +2,19 @@
 // Everything is driven by `tick(now)` so tests can use a fake clock.
 
 import {
-  BLAST_RADIUS_M,
   bearingDeg,
   distanceM,
   moveTowards,
-  type City,
   type Detection,
   type LatLon,
   type TargetKind,
   type WaveFile,
 } from "@tdts/shared";
-import type { ConnectedUnit, Impact, LogEntry, TruthShell, WaveRun, WorldState } from "../protocol";
+import type { ConnectedRadar, Kill, LogEntry, WaveRun, WorldState } from "../protocol";
 
 const BASE_SIGNATURE: Record<TargetKind, number> = { drone: 0.9, friendly: 0.9, bird: 0.2 };
 const SIGNATURE_JITTER = 0.05;
-const IMPACT_DISPLAY_MS = 3_000;
+const KILL_DISPLAY_MS = 3_000;
 const LOG_LIMIT = 100;
 
 interface LiveTarget {
@@ -50,28 +48,20 @@ interface RunRecord {
 export interface WorldOptions {
   /** Random source in [0, 1); injectable for tests. */
   random?: () => number;
-  blastRadiusM?: number;
 }
 
-export type ShellResult = { ok: true } | { ok: false; error: string };
-
 export class World {
-  readonly cities: readonly City[];
   private readonly random: () => number;
-  private readonly blastRadiusM: number;
 
   private readonly targets = new Map<string, LiveTarget>();
-  private readonly shells = new Map<string, TruthShell>();
   private readonly runs = new Map<string, RunRecord>();
-  private impacts: Impact[] = [];
+  private kills: Kill[] = [];
   private log: LogEntry[] = [];
   private runCounter = 0;
   private lastTickAt: number | null = null;
 
-  constructor(cities: readonly City[], options: WorldOptions = {}) {
-    this.cities = cities;
+  constructor(options: WorldOptions = {}) {
     this.random = options.random ?? Math.random;
-    this.blastRadiusM = options.blastRadiusM ?? BLAST_RADIUS_M;
   }
 
   // ------------------------------------------------------------- commands
@@ -113,23 +103,24 @@ export class World {
     return runId;
   }
 
-  /** Removes every target and shell; ends every running wave. */
+  /** Removes every target; ends every running wave. */
   stopAll(now: number): void {
     this.targets.clear();
-    this.shells.clear();
     for (const run of this.runs.values()) run.finished = true;
     this.addLog(now, "info", "All waves stopped");
   }
 
-  addShell(shell: Omit<TruthShell, "unitId">, unitId: string, now: number): ShellResult {
-    if (shell.impactAt <= shell.firedAt)
-      return { ok: false, error: "impactAt must be after firedAt" };
-    if (this.shells.has(shell.shellId))
-      return { ok: false, error: `duplicate shellId ${shell.shellId}` };
-    this.shells.set(shell.shellId, { ...shell, unitId });
-    const flightS = ((shell.impactAt - shell.firedAt) / 1000).toFixed(1);
-    this.addLog(now, "shell", `${unitId} fired ${shell.shellId} (${flightS} s flight)`);
-    return { ok: true };
+  /**
+   * A weapon hit this target (reported by a radar). Every computed shot hits,
+   * so the target is simply removed. Returns false if it no longer exists,
+   * e.g. because another radar already reported the same hit.
+   */
+  hit(truthId: string, reportedBy: string, now: number): boolean {
+    const t = this.targets.get(truthId);
+    if (!t || t.status !== "FLYING") return false;
+    this.kills.push({ targetId: t.id, kind: t.kind, point: { ...t.position }, at: now });
+    this.removeTarget(t.id, "destroyed", now, `reported by ${reportedBy}`);
+    return true;
   }
 
   /** Exact positions of every flying target within `rangeM` of `position`. */
@@ -157,44 +148,10 @@ export class World {
 
   tick(now: number): void {
     this.lastTickAt = now;
-    this.resolveShells(now);
     this.spawnTargets(now);
     this.moveTargets(now);
     this.finishRuns(now);
-    this.impacts = this.impacts.filter((i) => now - i.at < IMPACT_DISPLAY_MS);
-  }
-
-  private resolveShells(now: number): void {
-    const due = [...this.shells.values()]
-      .filter((s) => s.impactAt <= now)
-      .sort((a, b) => a.impactAt - b.impactAt);
-
-    for (const shell of due) {
-      this.shells.delete(shell.shellId);
-      const destroyed: string[] = [];
-      for (const t of this.targets.values()) {
-        if (t.status !== "FLYING" || t.spawnAt > shell.impactAt) continue;
-        // Where the target was at the exact moment of impact, not at the last tick.
-        const elapsedS = Math.max(0, shell.impactAt - t.positionAt) / 1000;
-        const at = moveTowards(t.position, t.destination, t.speedMps * elapsedS).position;
-        if (distanceM(at, shell.impactPoint) <= this.blastRadiusM) destroyed.push(t.id);
-      }
-      for (const id of destroyed) this.removeTarget(id, "destroyed", shell.impactAt);
-
-      this.impacts.push({
-        shellId: shell.shellId,
-        point: shell.impactPoint,
-        at: shell.impactAt,
-        destroyed,
-      });
-      this.addLog(
-        shell.impactAt,
-        "impact",
-        destroyed.length
-          ? `${shell.shellId} impact: destroyed ${destroyed.join(", ")}`
-          : `${shell.shellId} impact: no target hit`,
-      );
-    }
+    this.kills = this.kills.filter((k) => now - k.at < KILL_DISPLAY_MS);
   }
 
   private spawnTargets(now: number): void {
@@ -233,7 +190,12 @@ export class World {
     }
   }
 
-  private removeTarget(id: string, reason: "arrived" | "destroyed", at: number): void {
+  private removeTarget(
+    id: string,
+    reason: "arrived" | "destroyed",
+    at: number,
+    detail?: string,
+  ): void {
     const t = this.targets.get(id);
     if (!t) return;
     this.targets.delete(id);
@@ -242,7 +204,9 @@ export class World {
     this.addLog(
       at,
       reason === "arrived" ? "arrive" : "destroy",
-      reason === "arrived" ? `${id} reached its destination` : `${id} (${t.kind}) destroyed`,
+      reason === "arrived"
+        ? `${id} reached its destination`
+        : `${id} (${t.kind}) destroyed${detail ? `, ${detail}` : ""}`,
     );
   }
 
@@ -253,7 +217,7 @@ export class World {
 
   // ------------------------------------------------------------- read model
 
-  snapshot(now: number, units: ConnectedUnit[]): WorldState {
+  snapshot(now: number, radars: ConnectedRadar[]): WorldState {
     const targets = [...this.targets.values()]
       .filter((t) => t.status === "FLYING")
       .map((t) => ({
@@ -280,15 +244,7 @@ export class World {
       return { ...run, scheduled, flying };
     });
 
-    return {
-      now,
-      targets,
-      shells: [...this.shells.values()],
-      impacts: this.impacts,
-      units,
-      waveRuns,
-      log: this.log,
-    };
+    return { now, targets, kills: this.kills, radars, waveRuns, log: this.log };
   }
 }
 

@@ -4,9 +4,9 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { WORLD_TICK_MS } from "@tdts/shared";
-import { loadCities, loadConfig } from "./config";
+import { loadConfig } from "./config";
+import { startRadarServer } from "./radar-server";
 import { startUiServer } from "./ui-server";
-import { startUnitServer } from "./unit-server";
 import { World } from "./world";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
@@ -16,23 +16,21 @@ async function main() {
   const configPath = resolve(values.config ?? resolve(REPO_ROOT, "scenario/world-sim.json"));
 
   const config = await loadConfig(configPath);
-  const cities = await loadCities(config.citiesFile);
-  console.log(`[world] ${cities.length} cities from ${config.citiesFile}`);
   console.log(`[world] waves from ${config.wavesDir}`);
 
-  const world = new World(cities);
-  const units = startUnitServer(config.port, world);
-  const ui = await startUiServer(config.uiPort, world, config.wavesDir);
+  const world = new World();
+  const radars = startRadarServer(config.port, world);
+  const ui = await startUiServer(config.uiPort, world, config);
 
   const timer = setInterval(() => {
     const now = Date.now();
     world.tick(now);
-    ui.broadcastState(world.snapshot(now, units.units()));
+    ui.broadcastState(world.snapshot(now, radars.radars()));
   }, WORLD_TICK_MS);
 
   const shutdown = async () => {
     clearInterval(timer);
-    await Promise.all([units.close(), ui.close()]);
+    await Promise.all([radars.close(), ui.close()]);
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

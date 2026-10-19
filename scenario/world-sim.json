@@ -1,6 +1,12 @@
 {
   "port": 7000,
   "uiPort": 7001,
-  "citiesFile": "cities.json",
-  "wavesDir": "waves"
+  "wavesDir": "waves",
+  "view": {
+    "center": {
+      "lat": 47.2,
+      "lon": 8.0
+    },
+    "zoom": 8
+  }
 }

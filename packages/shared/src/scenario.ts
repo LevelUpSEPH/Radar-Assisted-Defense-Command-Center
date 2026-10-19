@@ -1,7 +1,7 @@
-// Scenario files loaded by the World Simulator (DESIGN.md §4).
+// Scenario and config file pieces (DESIGN.md §4).
 
 import { z } from "zod";
-import { CitySchema, LatLonSchema } from "./messages";
+import { LatLonSchema } from "./messages";
 
 export const TargetKindSchema = z.enum(["drone", "friendly", "bird"]);
 export type TargetKind = z.infer<typeof TargetKindSchema>;
@@ -28,7 +28,11 @@ export const WaveFileSchema = z
   });
 export type WaveFile = z.infer<typeof WaveFileSchema>;
 
-export const CitiesFileSchema = z.object({
-  cities: z.array(CitySchema),
+/** Where a program's map starts (center and Leaflet zoom level). */
+export const MapViewSchema = z.object({
+  center: LatLonSchema,
+  zoom: z.number().int().min(1).max(18),
 });
-export type CitiesFile = z.infer<typeof CitiesFileSchema>;
+export type MapView = z.infer<typeof MapViewSchema>;
+
+export const DEFAULT_MAP_VIEW: MapView = { center: { lat: 47.2, lon: 8.0 }, zoom: 8 };

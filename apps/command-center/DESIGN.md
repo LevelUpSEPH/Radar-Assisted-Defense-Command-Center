@@ -1,8 +1,8 @@
 # Command Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **planned** (milestones 3, 4 and 6).
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress** (piece 1, the map, done).
 
-The Command Center is the brain of the network. It registers radars and weapons, builds one picture of the sky from all radar reports, decides what is an enemy, and tells weapons when to prepare and fire. It never sees ground truth: everything it knows comes from radar and weapon reports.
+The Command Center is the brain of the network. It registers radars and weapons, builds one picture of the sky from all radar reports, decides what is an enemy, and tells weapons when to prepare and fire. It never sees ground truth and **never connects to the World Simulator**: everything it knows comes from radar and weapon reports.
 
 ---
 
@@ -11,9 +11,9 @@ The Command Center is the brain of the network. It registers radars and weapons,
 - Issue, track and revoke registration keys; register units; watch heartbeats.
 - Fuse radar tracks into system tracks.
 - Decide each track's classification.
-- Rank threats against cities.
+- Rank threats by urgency.
 - Assign weapons, control firing (automatic or with approval), cancel shots.
-- Confirm kills through radars and re-engage on a miss.
+- When a shot arrives, have the radars remove the target from the world and confirm the kill.
 - Operator UI: the main map and control panels.
 
 ---
@@ -24,7 +24,7 @@ The Command Center is the brain of the network. It registers radars and weapons,
 {
   "port": 7100,
   "uiPort": 7101,
-  "worldSimUrl": "ws://localhost:7000",
+  "view": { "center": { "lat": 47.2, "lon": 8.0 }, "zoom": 8 },
   "dataFile": "../apps/command-center/data/state.json",
   "fireMode": "approval",
   "minLikelihoodToEngage": 0.6,
@@ -32,7 +32,7 @@ The Command Center is the brain of the network. It registers radars and weapons,
 }
 ```
 
-The Command Center connects to the World Simulator **only** for `getCities` (city locations are public knowledge).
+`view` is where the operator map starts. Settings are added to this file as the pieces that need them are built.
 
 ---
 
@@ -103,9 +103,9 @@ Every system track has `classification`: `UNKNOWN` | `FRIENDLY` | `ENEMY`.
 
 ---
 
-## 6. Threat evaluation
+## 6. Threat ranking
 
-For each enemy track, extend its heading as a straight line and find the first city whose `radiusM` it crosses. That gives `threatenedCity` and `timeToCityS`. Targets threatening a city sooner have higher priority. Tracks not heading at any city come last, ordered by distance to the nearest city.
+There are no cities: the system protects everything. **Proposal, to confirm when we build it:** rank enemy tracks by urgency, meaning the one whose **last chance to be intercepted** by any available weapon comes soonest goes first. A target about to leave all weapon coverage is engaged before one that will stay in range for minutes.
 
 ---
 
@@ -117,18 +117,18 @@ Every `PLANNING_INTERVAL_MS` (1 s):
 
 1. Take the engageable enemy tracks in priority order.
 2. For each track with fewer than `maxWeaponsPerTarget` active engagements, look at every registered, online weapon that is `IDLE` (or `READY` without an engagement) and has ammo. Pick the one with the **earliest impact time**.
-3. Create an engagement and send `prepare`. A second weapon is added only if the first one's impact time is later than half the track's `timeToCityS`, or if a previous engagement on that track missed.
+3. Create an engagement and send `prepare`. Since a computed shot always hits, a second weapon is only assigned when the first engagement is lost (cancelled, `fireFailed`, weapon offline or revoked). Whether to also assign backups up front is **open**.
 4. A weapon has at most one engagement at a time.
 5. While an engagement is active, the weapon gets a `trackUpdate` every time the track updates.
 
 ### Engagement life cycle
 
 ```
-PREPARING → READY → AWAITING_APPROVAL → FIRING → IN_FLIGHT → CONFIRMING → KILL | MISS | UNCONFIRMED
+PREPARING → READY → AWAITING_APPROVAL → FIRING → IN_FLIGHT → CONFIRMING → KILL | UNCONFIRMED
      └──────────┴───────────┴──────────────┴─→ CANCELLED (reclassified, track lost, weapon offline/revoked, rejected)
 ```
 
-`AWAITING_APPROVAL` exists only in `approval` fire mode. `FIRING` covers the time between `fire` and the shell leaving (the weapon waits for its fire time). A `fireFailed` returns the engagement to `READY` for the next planning cycle to decide.
+`AWAITING_APPROVAL` exists only in `approval` fire mode. `FIRING` covers the time between `fire` and the shot (the weapon waits for its fire time). `IN_FLIGHT` lasts until the shell's arrival time. A `fireFailed` returns the engagement to `READY` for the next planning cycle to decide.
 
 ---
 
@@ -142,19 +142,19 @@ PREPARING → READY → AWAITING_APPROVAL → FIRING → IN_FLIGHT → CONFIRMIN
 
 ## 9. Kill confirmation
 
-The weapon reports the shot, the Command Center asks the radar, the radar reports back.
+The weapon reports the shot, the Command Center tells the radar, the radar reports back. A computed shot always hits, so this is how the hit reaches the world, not a check of whether it hit.
 
 1. The weapon sends `shotFired { engagementId, firedAt, impactAt, impactPoint }`.
-2. At `impactAt + KILL_CHECK_DELAY_MS`, the Command Center sends `confirmKill { checkId, position, radiusM }` to every radar whose range covers `impactPoint`.
-3. Any radar answering `destroyed: false` → **MISS**; the track is re-queued for assignment.
-4. All radars answering `destroyed: true` → **KILL**; the track is closed.
-5. No answer within `KILL_CHECK_TIMEOUT_MS` → **UNCONFIRMED**.
+2. At `impactAt + KILL_CHECK_DELAY_MS`, the Command Center sends `confirmKill { checkId, radarTrackId }` to every radar that has a track linked to the target's system track.
+3. Each radar tells the World Simulator `targetHit` for the object behind its track, then answers `killReport { checkId, destroyed }` once the object is gone from its scans.
+4. Any radar answering `destroyed: true` → **KILL**; the track is closed.
+5. No answer within `KILL_CHECK_TIMEOUT_MS` → **UNCONFIRMED** (e.g. the radar went offline); the track is re-queued if it is still reported.
 
 ---
 
 ## 10. Operator UI (port 7101)
 
-- **Map:** cities, radars (with range circles), weapons (min/max range rings, state, ammo), system tracks (colored by classification, with heading vector and predicted intercept point), shells in flight.
+- **Map:** radars (with range circles), weapons (min/max range rings, state, ammo), system tracks (colored by classification, with heading vector and predicted intercept point), shots in flight (launch point → aim point, with arrival countdown).
 - **Keys panel:** generate (auto or manual with name + approximate position), list with status, revoke, copy.
 - **Units panel:** online/offline/pending, approve/reject pending units.
 - **Tracks panel:** classification, likelihood, reporting radars, override controls.

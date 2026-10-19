@@ -5,11 +5,11 @@ Part of [TDTS](../../docs/DESIGN.md). Code every program depends on, so they all
 | File           | Contents                                                                                                                                                                                        |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `messages.ts`  | Network protocol: envelope, zod schemas per link (`ToCommandCenter`, `FromCommandCenter`, `ToWorldSim`, `FromWorldSim`), `createMessage`, `parseMessage`. **Source of truth for the protocol.** |
-| `scenario.ts`  | Wave file and cities file schemas.                                                                                                                                                              |
+| `scenario.ts`  | Wave file schema; map view (start center/zoom) for configs.                                                                                                                                     |
 | `geo.ts`       | Great-circle math: `distanceM`, `bearingDeg`, `destination`, `moveTowards`, `extrapolate`, bearing helpers.                                                                                     |
 | `intercept.ts` | `findEarliestIntercept`: when and where a weapon can hit a constant-velocity target. Used by the Command Center (assignment) and Shot Control (firing solution).                                |
 | `keys.ts`      | Registration keys: `generateKey`, `isValidKeyFormat`.                                                                                                                                           |
-| `constants.ts` | Tuning values: blast radius, fusion gates, heartbeat and kill-check timings, tick rate, default ports.                                                                                          |
+| `constants.ts` | Tuning values: fusion gates, heartbeat and kill-check timings, tick rate, default ports.                                                                                                        |
 
 ## Usage
 

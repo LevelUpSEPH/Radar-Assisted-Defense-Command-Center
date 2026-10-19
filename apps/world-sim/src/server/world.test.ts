@@ -24,7 +24,7 @@ function wave(overrides: Partial<WaveFile["targets"][number]>[] = [{}]): WaveFil
 }
 
 function newWorld() {
-  return new World([], { random: () => 0.5 }); // 0.5 → zero signature jitter
+  return new World({ random: () => 0.5 }); // 0.5 → zero signature jitter
 }
 
 /** Ticks every 100 ms from `from` (exclusive) to `to` (inclusive). */
@@ -118,94 +118,54 @@ describe("scan", () => {
   });
 });
 
-describe("shells", () => {
-  it("destroys a target inside the blast radius at impact time", () => {
+describe("hits", () => {
+  it("removes a hit target, counts it and shows the kill", () => {
     const w = newWorld();
     w.startWave(wave(), "w.json", T0);
     w.tick(T0);
+    run(w, T0, T0 + 20_000);
 
-    // The target will be 2 km east of origin after 20 s.
-    const impactPoint = destination(origin, 90, 2_000);
-    expect(
-      w.addShell(
-        { shellId: "S1", from: origin, impactPoint, firedAt: T0, impactAt: T0 + 20_000 },
-        "weapon-1",
-        T0,
-      ),
-    ).toEqual({ ok: true });
-
-    run(w, T0, T0 + 19_900);
-    expect(w.snapshot(T0 + 19_900, []).targets).toHaveLength(1);
-    w.tick(T0 + 20_000);
+    expect(w.hit("W1-t1", "radar-1", T0 + 20_000)).toBe(true);
     const s = w.snapshot(T0 + 20_000, []);
     expect(s.targets).toHaveLength(0);
-    expect(s.impacts).toEqual([
-      { shellId: "S1", point: impactPoint, at: T0 + 20_000, destroyed: ["W1-t1"] },
+    expect(s.kills).toEqual([
+      { targetId: "W1-t1", kind: "drone", point: expect.any(Object), at: T0 + 20_000 },
     ]);
-    expect(s.waveRuns[0]).toMatchObject({ destroyed: 1, finished: true });
+    expect(distanceM(s.kills[0]!.point, destination(origin, 90, 2_000))).toBeLessThan(1);
+
+    w.tick(T0 + 20_100);
+    expect(w.snapshot(T0 + 20_100, []).waveRuns[0]).toMatchObject({
+      destroyed: 1,
+      finished: true,
+    });
   });
 
-  it("uses the exact impact time, not the tick time", () => {
-    // Impact at +20.05 s; the next tick is at +20.1 s. At 100 m/s the target
-    // moves 5 m in between, so a point 2005 m out must hit with a 1 m blast.
-    const w = new World([], { random: () => 0.5, blastRadiusM: 1 });
-    w.startWave(wave(), "w.json", T0);
-    w.tick(T0);
-    w.addShell(
-      {
-        shellId: "S1",
-        from: origin,
-        impactPoint: destination(origin, 90, 2_005),
-        firedAt: T0,
-        impactAt: T0 + 20_050,
-      },
-      "weapon-1",
-      T0,
-    );
-    run(w, T0, T0 + 20_100);
-    expect(w.snapshot(T0 + 20_100, []).impacts[0]!.destroyed).toEqual(["W1-t1"]);
-  });
-
-  it("misses a target outside the blast radius", () => {
+  it("ignores a second report of the same hit and unknown targets", () => {
     const w = newWorld();
     w.startWave(wave(), "w.json", T0);
     w.tick(T0);
-    w.addShell(
-      {
-        shellId: "S1",
-        from: origin,
-        impactPoint: destination(origin, 90, 2_500), // 500 m ahead of the target at impact
-        firedAt: T0,
-        impactAt: T0 + 20_000,
-      },
-      "weapon-1",
-      T0,
-    );
-    run(w, T0, T0 + 20_000);
-    const s = w.snapshot(T0 + 20_000, []);
-    expect(s.targets).toHaveLength(1);
-    expect(s.impacts[0]!.destroyed).toEqual([]);
+    expect(w.hit("W1-t1", "radar-1", T0)).toBe(true);
+    expect(w.hit("W1-t1", "radar-2", T0)).toBe(false);
+    expect(w.hit("nope", "radar-1", T0)).toBe(false);
+    expect(w.snapshot(T0, []).waveRuns[0]!.destroyed).toBe(1);
   });
 
-  it("rejects invalid and duplicate shells", () => {
+  it("can't hit a target that hasn't appeared yet", () => {
     const w = newWorld();
-    const shell = { shellId: "S1", from: origin, impactPoint: origin, firedAt: T0, impactAt: T0 };
-    expect(w.addShell(shell, "weapon-1", T0).ok).toBe(false);
-    expect(w.addShell({ ...shell, impactAt: T0 + 1 }, "weapon-1", T0).ok).toBe(true);
-    expect(w.addShell({ ...shell, impactAt: T0 + 1 }, "weapon-1", T0).ok).toBe(false);
+    w.startWave(wave([{ spawnAtS: 30 }]), "w.json", T0);
+    w.tick(T0);
+    expect(w.hit("W1-t1", "radar-1", T0)).toBe(false);
   });
 
-  it("clears impacts after 3 s", () => {
+  it("clears kills from the map after 3 s", () => {
     const w = newWorld();
-    w.addShell(
-      { shellId: "S1", from: origin, impactPoint: origin, firedAt: T0, impactAt: T0 + 100 },
-      "weapon-1",
-      T0,
-    );
-    w.tick(T0 + 100);
-    expect(w.snapshot(T0 + 100, []).impacts).toHaveLength(1);
-    w.tick(T0 + 3_100);
-    expect(w.snapshot(T0 + 3_100, []).impacts).toHaveLength(0);
+    w.startWave(wave(), "w.json", T0);
+    w.tick(T0);
+    w.hit("W1-t1", "radar-1", T0);
+    w.tick(T0 + 2_900);
+    expect(w.snapshot(T0 + 2_900, []).kills).toHaveLength(1);
+    w.tick(T0 + 3_000);
+    expect(w.snapshot(T0 + 3_000, []).kills).toHaveLength(0);
   });
 });
 
@@ -214,15 +174,9 @@ describe("stopAll", () => {
     const w = newWorld();
     w.startWave(wave([{}, { spawnAtS: 30 }]), "w.json", T0);
     w.tick(T0);
-    w.addShell(
-      { shellId: "S1", from: origin, impactPoint: origin, firedAt: T0, impactAt: T0 + 5_000 },
-      "weapon-1",
-      T0,
-    );
     w.stopAll(T0 + 100);
     const s = w.snapshot(T0 + 100, []);
     expect(s.targets).toHaveLength(0);
-    expect(s.shells).toHaveLength(0);
     expect(s.waveRuns[0]).toMatchObject({ scheduled: 0, flying: 0, finished: true });
   });
 });

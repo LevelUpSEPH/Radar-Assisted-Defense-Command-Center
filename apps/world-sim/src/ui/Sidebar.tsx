@@ -6,7 +6,8 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour12: false
 export function Sidebar({ world }: { world: WorldSocket }) {
   const { connected, waveFiles, state, error, clearError, send } = world;
   const runs = state ? [...state.waveRuns].reverse() : [];
-  const units = state?.units ?? [];
+  const radars = state?.radars ?? [];
+  const destroyed = state?.waveRuns.reduce((n, r) => n + r.destroyed, 0) ?? 0;
   const log = state ? [...state.log].reverse() : [];
   const counts = state ? countKinds(state.targets.map((t) => t.kind)) : null;
 
@@ -36,7 +37,7 @@ export function Sidebar({ world }: { world: WorldSocket }) {
           <Stat label="Drones" value={counts.drone} color={KIND_COLOR.drone} />
           <Stat label="Friendly" value={counts.friendly} color={KIND_COLOR.friendly} />
           <Stat label="Birds" value={counts.bird} color={KIND_COLOR.bird} />
-          <Stat label="Shells" value={state?.shells.length ?? 0} />
+          <Stat label="Destroyed" value={destroyed} />
         </div>
       )}
 
@@ -108,13 +109,13 @@ export function Sidebar({ world }: { world: WorldSocket }) {
       </section>
 
       <section>
-        <h2>Connected units</h2>
-        {units.length === 0 && <p className="muted">None.</p>}
+        <h2>Connected radars</h2>
+        {radars.length === 0 && <p className="muted">None.</p>}
         <ul className="list">
-          {units.map((u) => (
-            <li key={u.unitId} className="row">
-              <span>{u.unitId}</span>
-              <span className="muted small">{u.unitType}</span>
+          {radars.map((r) => (
+            <li key={r.radarId} className="row">
+              <span>{r.radarId}</span>
+              <span className="muted small">{(r.rangeM / 1000).toFixed(0)} km range</span>
             </li>
           ))}
         </ul>

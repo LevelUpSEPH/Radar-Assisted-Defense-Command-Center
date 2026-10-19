@@ -1,13 +1,4 @@
-import {
-  BLAST_RADIUS_M,
-  bearingDeg,
-  destination,
-  distanceM,
-  type City,
-  type LatLon,
-  type TargetKind,
-} from "@tdts/shared";
-import { latLngBounds } from "leaflet";
+import type { LatLon, MapView as MapViewConfig, TargetKind } from "@tdts/shared";
 import { useEffect, useRef } from "react";
 import {
   Circle,
@@ -18,7 +9,7 @@ import {
   Tooltip,
   useMap,
 } from "react-leaflet";
-import type { TruthShell, WorldState } from "../protocol";
+import type { WorldState } from "../protocol";
 
 export const KIND_COLOR: Record<TargetKind, string> = {
   drone: "#ef4444",
@@ -26,13 +17,12 @@ export const KIND_COLOR: Record<TargetKind, string> = {
   bird: "#f59e0b",
 };
 const RADAR_COLOR = "#22c55e";
-const WEAPON_COLOR = "#a855f7";
-const SHELL_COLOR = "#fb923c";
-const CITY_COLOR = "#94a3b8";
+const KILL_COLOR = "#fb923c";
+const KILL_DISPLAY_MS = 3_000;
 
 const toLatLng = (p: LatLon): [number, number] => [p.lat, p.lon];
 
-export function MapView({ cities, state }: { cities: City[]; state: WorldState | null }) {
+export function MapView({ view, state }: { view: MapViewConfig | null; state: WorldState | null }) {
   return (
     <MapContainer center={[47, 8]} zoom={8} className="map" preferCanvas>
       <TileLayer
@@ -40,39 +30,28 @@ export function MapView({ cities, state }: { cities: City[]; state: WorldState |
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         className="dark-tiles"
       />
-      <FitToCities cities={cities} />
+      <ApplyView view={view} />
 
-      {cities.map((c) => (
+      {state?.radars.map((r) => (
         <Circle
-          key={c.id}
-          center={toLatLng(c.position)}
-          radius={c.radiusM}
-          pathOptions={{ color: CITY_COLOR, weight: 1, fillOpacity: 0.08 }}
+          key={r.radarId}
+          center={toLatLng(r.position)}
+          radius={r.rangeM}
+          pathOptions={{ color: RADAR_COLOR, weight: 1, opacity: 0.6, fillOpacity: 0.04 }}
         >
-          <Tooltip permanent direction="center" className="city-label">
-            {c.name}
-          </Tooltip>
+          <Tooltip>radar {r.radarId}</Tooltip>
         </Circle>
       ))}
-
-      {state?.units.map((u) =>
-        u.position ? (
-          <CircleMarker
-            key={u.unitId}
-            center={toLatLng(u.position)}
-            radius={7}
-            pathOptions={{
-              color: u.unitType === "radar" ? RADAR_COLOR : WEAPON_COLOR,
-              weight: 2,
-              fillOpacity: 0.3,
-            }}
-          >
-            <Tooltip>
-              {u.unitType} {u.unitId}
-            </Tooltip>
-          </CircleMarker>
-        ) : null,
-      )}
+      {state?.radars.map((r) => (
+        <CircleMarker
+          key={`${r.radarId}-site`}
+          center={toLatLng(r.position)}
+          radius={6}
+          pathOptions={{ color: RADAR_COLOR, weight: 2, fillOpacity: 0.4 }}
+        >
+          <Tooltip>radar {r.radarId}</Tooltip>
+        </CircleMarker>
+      ))}
 
       {state?.targets.map((t) => (
         <Polyline
@@ -100,24 +79,17 @@ export function MapView({ cities, state }: { cities: City[]; state: WorldState |
         </CircleMarker>
       ))}
 
-      {state?.shells.map((s) => (
-        <ShellMarker key={s.shellId} shell={s} now={state.now} />
-      ))}
-
-      {state?.impacts.map((i) => {
-        const fade = Math.max(0, 1 - (state.now - i.at) / 3_000);
+      {state?.kills.map((k) => {
+        const fade = Math.max(0, 1 - (state.now - k.at) / KILL_DISPLAY_MS);
         return (
-          <Circle
-            key={i.shellId}
-            center={toLatLng(i.point)}
-            radius={BLAST_RADIUS_M}
-            pathOptions={{
-              color: SHELL_COLOR,
-              weight: 2,
-              opacity: fade,
-              fillOpacity: 0.5 * fade,
-            }}
-          />
+          <CircleMarker
+            key={k.targetId}
+            center={toLatLng(k.point)}
+            radius={14 - 6 * fade}
+            pathOptions={{ color: KILL_COLOR, weight: 3, opacity: fade, fillOpacity: 0.4 * fade }}
+          >
+            <Tooltip>{k.targetId} destroyed</Tooltip>
+          </CircleMarker>
         );
       })}
 
@@ -126,43 +98,15 @@ export function MapView({ cities, state }: { cities: City[]; state: WorldState |
   );
 }
 
-function ShellMarker({ shell, now }: { shell: TruthShell; now: number }) {
-  const progress = Math.min(
-    1,
-    Math.max(0, (now - shell.firedAt) / (shell.impactAt - shell.firedAt)),
-  );
-  const total = distanceM(shell.from, shell.impactPoint);
-  const at = destination(shell.from, bearingDeg(shell.from, shell.impactPoint), total * progress);
-  return (
-    <>
-      <Polyline
-        positions={[toLatLng(shell.from), toLatLng(shell.impactPoint)]}
-        pathOptions={{ color: SHELL_COLOR, weight: 1, opacity: 0.5 }}
-      />
-      <CircleMarker
-        center={toLatLng(at)}
-        radius={3}
-        pathOptions={{ color: SHELL_COLOR, fillColor: SHELL_COLOR, fillOpacity: 1 }}
-      >
-        <Tooltip>
-          {shell.shellId} from {shell.unitId} · impact in{" "}
-          {Math.max(0, (shell.impactAt - now) / 1000).toFixed(1)} s
-        </Tooltip>
-      </CircleMarker>
-    </>
-  );
-}
-
-/** Fits the view to the cities once, when they first arrive. */
-function FitToCities({ cities }: { cities: City[] }) {
+/** Moves the map to the configured view once, when it first arrives. */
+function ApplyView({ view }: { view: MapViewConfig | null }) {
   const map = useMap();
   const done = useRef(false);
   useEffect(() => {
-    if (done.current || cities.length === 0) return;
+    if (done.current || !view) return;
     done.current = true;
-    const bounds = latLngBounds(cities.map((c) => toLatLng(c.position)));
-    map.fitBounds(bounds.pad(0.6));
-  }, [cities, map]);
+    map.setView(toLatLng(view.center), view.zoom);
+  }, [view, map]);
   return null;
 }
 
@@ -172,8 +116,7 @@ function Legend() {
     ["Friendly", KIND_COLOR.friendly],
     ["Bird", KIND_COLOR.bird],
     ["Radar", RADAR_COLOR],
-    ["Weapon", WEAPON_COLOR],
-    ["Shell", SHELL_COLOR],
+    ["Destroyed", KILL_COLOR],
   ];
   return (
     <div className="legend leaflet-bottom leaflet-left">

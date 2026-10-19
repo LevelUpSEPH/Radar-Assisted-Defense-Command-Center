@@ -4,7 +4,9 @@
 // Messages are grouped by the link they travel on, so each endpoint only
 // accepts what it should receive:
 //   ToCommandCenter / FromCommandCenter   radar & weapon  <-> Command Center
-//   ToWorldSim      / FromWorldSim        units & CC      <-> World Simulator
+//   ToWorldSim      / FromWorldSim        radar           <-> World Simulator
+//
+// Only radars talk to the World Simulator: it is what they "see".
 
 import { z } from "zod";
 
@@ -49,14 +51,6 @@ export const RejectReasonSchema = z.enum([
   "REJECTED_BY_OPERATOR",
 ]);
 export type RejectReason = z.infer<typeof RejectReasonSchema>;
-
-export const CitySchema = z.object({
-  id: Id,
-  name: z.string().min(1),
-  position: LatLonSchema,
-  radiusM: Meters,
-});
-export type City = z.infer<typeof CitySchema>;
 
 const RangesSchema = z
   .object({ minRangeM: Meters, maxRangeM: Meters })
@@ -142,10 +136,7 @@ export const ToCommandCenterSchema = z.discriminatedUnion("type", [
   message("heartbeat", Empty),
   // radar
   message("tracks", z.object({ scanAt: EpochMs, tracks: z.array(RadarTrackSchema) })),
-  message(
-    "killReport",
-    z.object({ checkId: Id, destroyed: z.boolean(), survivingRadarTrackId: Id.optional() }),
-  ),
+  message("killReport", z.object({ checkId: Id, destroyed: z.boolean() })),
   // weapon
   message(
     "status",
@@ -175,7 +166,8 @@ export const FromCommandCenterSchema = z.discriminatedUnion("type", [
   message("pending", z.object({ reason: z.literal("POSITION_MISMATCH"), distanceM: Meters })),
   message("revoked", Empty),
   // radar
-  message("confirmKill", z.object({ checkId: Id, position: LatLonSchema, radiusM: Meters })),
+  /** A weapon hit the object behind this radar track; remove it from the world and confirm. */
+  message("confirmKill", z.object({ checkId: Id, radarTrackId: Id })),
   // weapon
   message("prepare", z.object({ engagementId: Id, track: SystemTrackSchema })),
   message("trackUpdate", z.object({ engagementId: Id, track: SystemTrackSchema })),
@@ -184,32 +176,19 @@ export const FromCommandCenterSchema = z.discriminatedUnion("type", [
   message("setRanges", RangesSchema),
 ]);
 
-// ---------------------------------------------------------------- -> World Simulator
+// ---------------------------------------------------------------- radar -> World Simulator
 
 export const ToWorldSimSchema = z.discriminatedUnion("type", [
   message(
     "hello",
-    z.object({
-      unitId: Id,
-      unitType: z.enum(["radar", "weapon", "commandCenter"]),
-      position: LatLonSchema.optional(),
-    }),
+    z.object({ radarId: Id, position: LatLonSchema, rangeM: z.number().positive() }),
   ),
   message("scan", z.object({ scanId: Id, position: LatLonSchema, rangeM: z.number().positive() })),
-  message(
-    "shell",
-    z.object({
-      shellId: Id,
-      from: LatLonSchema,
-      impactPoint: LatLonSchema,
-      firedAt: EpochMs,
-      impactAt: EpochMs,
-    }),
-  ),
-  message("getCities", Empty),
+  /** The object was hit by a weapon (a computed shot always hits): remove it. */
+  message("targetHit", z.object({ truthId: Id })),
 ]);
 
-// ---------------------------------------------------------------- World Simulator ->
+// ---------------------------------------------------------------- World Simulator -> radar
 
 export const DetectionSchema = z.object({
   /** Ground-truth id. Radars use it only to link consecutive scans; never forwarded. */
@@ -232,7 +211,6 @@ export const FromWorldSimSchema = z.discriminatedUnion("type", [
       detections: z.array(DetectionSchema),
     }),
   ),
-  message("cities", z.object({ cities: z.array(CitySchema) })),
 ]);
 
 // ---------------------------------------------------------------- shared by all servers

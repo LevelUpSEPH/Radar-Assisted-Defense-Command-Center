@@ -38,26 +38,26 @@ This document covers the system as a whole: the programs, how they talk, and the
 
 | Program             | Role                                                                                                                                      | Instances |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| **World Simulator** | Owns the _ground truth_: cities, real target positions, shells, impacts. Loads waves from JSON.                                           | 1         |
-| **Command Center**  | Registry and keys, track fusion, classification, threat evaluation, weapon assignment, engagement control. Main operator map.             | 1         |
+| **World Simulator** | Owns the _ground truth_: real target positions. Loads waves from JSON. Only radars connect to it: it is what they see.                    | 1         |
+| **Command Center**  | Registry and keys, track fusion, classification, threat ranking, weapon assignment, engagement control. Main operator map.                | 1         |
 | **Radar Center**    | Senses targets in its range, reports noisy tracks with speed, heading and vehicle likelihood. Has an IFF (friend/enemy) report interface. | many      |
 | **Shot Control**    | A weapon. Prepares, computes its own firing solution, fires, reloads, reports status and ammo. Configurable ranges.                       | many      |
 
 ```
-                  ┌──────────────────────────┐
-                  │     World Simulator      │  ground truth, waves, impacts
-                  └──▲──────────────────▲────┘
-           scan /    │                  │  shell (impact point + time)
-           scan result                  │
-   ┌─────────────────┴┐   tracks   ┌────┴─────────────┐  prepare / fire / cancel  ┌──────────────┐
-   │  Radar Center(s) │──────────▶│  Command Center  │─────────────────────────▶│ Shot Control │
-   │  + IFF UI        │◀──────────│  + map UI        │◀─────────────────────────│ (s) + UI     │
-   └──────────────────┘ kill check └──────────────────┘   status / shot fired     └──────────────┘
+   ┌──────────────────────────┐
+   │     World Simulator      │  ground truth: waves, target positions
+   └──────────▲───────────────┘
+              │ scan / scan result
+              │ target hit
+   ┌──────────┴───────┐   tracks    ┌──────────────────┐  prepare / fire / cancel  ┌──────────────┐
+   │  Radar Center(s) │───────────▶│  Command Center  │─────────────────────────▶│ Shot Control │
+   │  + IFF UI        │◀───────────│  + map UI        │◀─────────────────────────│ (s) + UI     │
+   └──────────────────┘ confirm kill└──────────────────┘   status / shot fired     └──────────────┘
 ```
 
 ### Information boundaries (the key design rule)
 
-- Only the **World Simulator** knows true positions and target kinds.
+- Only the **World Simulator** knows true positions and target kinds, and **only radars connect to it**. Radars see what the world shows them; weapons shoot where the Command Center tells them; the Command Center never sees the world directly.
 - **Radars** see only what a scan returns: position (with noise added by the radar), a radar signature value, and whether the target answers IFF. They never see the target's `kind` or destination.
 - The **Command Center** knows only what radars report and what weapons report.
 - **Weapons** know only the track data the Command Center sends them.
@@ -70,8 +70,8 @@ So the Command Center's map can be wrong (noise, a misclassified bird), and that
 2. A wave is started in the World Simulator; targets begin to fly.
 3. Radars scan the World Simulator and report tracks to the Command Center.
 4. The Command Center fuses tracks, classifies them, ranks threats, and sends `prepare` to the weapon that can intercept soonest.
-5. The weapon prepares (busy), reports ready, and on `fire` computes its firing solution and fires a shell into the World Simulator.
-6. The World Simulator resolves the impact; the Command Center asks the radars whether the target is gone, and re-engages if not.
+5. The weapon prepares (busy), reports ready, and on `fire` computes its firing solution and fires. **A computed shot always hits** (ideal test scene: same math, no other factors), so the weapon reports the shot and its arrival time.
+6. When the shell arrives, the Command Center tells the radars tracking that target. The radar tells the World Simulator to remove the object (it knows which one it is tracking), then confirms the kill back to the Command Center.
 
 ---
 
@@ -79,7 +79,7 @@ So the Command Center's map can be wrong (noise, a misclassified bird), and that
 
 - **Language:** TypeScript everywhere (Node.js 22 or newer).
 - **Repo:** one npm-workspaces monorepo, with a `shared` package for message types, validation and geo math, so all programs agree on the protocol.
-- **Transport:** WebSockets (`ws`). The Command Center and World Simulator are servers; Radars and Shot Controls are clients of both.
+- **Transport:** WebSockets (`ws`). The Command Center is a server for Radars and Shot Controls. The World Simulator is a server for Radars only.
 - **Validation:** `zod` schemas for every message; invalid messages are rejected and logged.
 - **UIs:** each program serves its own browser page (Vite + React). Maps use Leaflet with OpenStreetMap tiles (**needs internet for map tiles**).
 - **Persistence:** the Command Center stores keys and registered units in a local JSON file so they survive restarts. Nothing else persists.
@@ -96,7 +96,6 @@ TDTS/
 ├─ apps/shot-control/      Shot Control (client + weapon UI)
 └─ scenario/
    ├─ world-sim.json       World Simulator config
-   ├─ cities.json          real-world cities
    ├─ waves/*.json         incoming waves
    ├─ radars/*.json        one config per radar instance
    ├─ weapons/*.json       one config per weapon instance
@@ -113,7 +112,7 @@ A root script (`npm run scenario`, milestone 7) starts the World Simulator, the 
 - **Distances and bearings:** great-circle (haversine), from the shared geo utils. Bearings are degrees clockwise from north, `[0, 360)`.
 - **Units:** meters, meters per second, seconds in config; epoch milliseconds on the wire.
 - **Time:** real time. All programs run on one machine, so they share a clock.
-- **Tuning values** (blast radius, gates, timeouts) live in `packages/shared/src/constants.ts`.
+- **Tuning values** (gates, timeouts, tick rate) live in `packages/shared/src/constants.ts`.
 
 ---
 
@@ -125,32 +124,31 @@ Every message uses one envelope:
 { "type": "prepare", "msgId": "uuid", "ts": 1760000000000, "payload": {} }
 ```
 
-| Direction      | type                      | payload (summary)                                                                                    |
-| -------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| unit → CC      | `register`                | key, unitType, name, position, capabilities (radar: rangeM; weapon: ranges, ammo, times, shellSpeed) |
-| CC → unit      | `registered` / `rejected` | unitId / reason                                                                                      |
-| CC → unit      | `pending`                 | POSITION_MISMATCH, distanceM (manual key, waiting for operator)                                      |
-| unit → CC      | `heartbeat`               | —                                                                                                    |
-| CC → unit      | `revoked`                 | —                                                                                                    |
-| radar → CC     | `tracks`                  | list of radar tracks, each with its current IFF report                                               |
-| CC → radar     | `confirmKill`             | checkId, position, radiusM                                                                           |
-| radar → CC     | `killReport`              | checkId, destroyed, survivingRadarTrackId?                                                           |
-| CC → weapon    | `prepare`                 | engagementId, track                                                                                  |
-| CC → weapon    | `trackUpdate`             | engagementId, track                                                                                  |
-| CC → weapon    | `fire` / `cancel`         | engagementId                                                                                         |
-| CC → weapon    | `setRanges`               | minRangeM, maxRangeM                                                                                 |
-| weapon → CC    | `status`                  | state, ammo, ranges, engagementId, stateUntil                                                        |
-| weapon → CC    | `shotFired`               | engagementId, firedAt, impactAt, impactPoint                                                         |
-| weapon → CC    | `fireFailed`              | engagementId, reason                                                                                 |
-| any → world    | `hello`                   | unitId, unitType, position                                                                           |
-| radar → world  | `scan` → `scanResult`     | position, rangeM → observedAt, detections                                                            |
-| weapon → world | `shell`                   | from, impactPoint, firedAt, impactAt                                                                 |
-| CC → world     | `getCities` → `cities`    | — → city list                                                                                        |
-| server → any   | `error`                   | code, detail                                                                                         |
+| Direction     | type                      | payload (summary)                                                                                    |
+| ------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| unit → CC     | `register`                | key, unitType, name, position, capabilities (radar: rangeM; weapon: ranges, ammo, times, shellSpeed) |
+| CC → unit     | `registered` / `rejected` | unitId / reason                                                                                      |
+| CC → unit     | `pending`                 | POSITION_MISMATCH, distanceM (manual key, waiting for operator)                                      |
+| unit → CC     | `heartbeat`               | —                                                                                                    |
+| CC → unit     | `revoked`                 | —                                                                                                    |
+| radar → CC    | `tracks`                  | list of radar tracks, each with its current IFF report                                               |
+| CC → radar    | `confirmKill`             | checkId, radarTrackId (a weapon hit it)                                                              |
+| radar → CC    | `killReport`              | checkId, destroyed                                                                                   |
+| CC → weapon   | `prepare`                 | engagementId, track                                                                                  |
+| CC → weapon   | `trackUpdate`             | engagementId, track                                                                                  |
+| CC → weapon   | `fire` / `cancel`         | engagementId                                                                                         |
+| CC → weapon   | `setRanges`               | minRangeM, maxRangeM                                                                                 |
+| weapon → CC   | `status`                  | state, ammo, ranges, engagementId, stateUntil                                                        |
+| weapon → CC   | `shotFired`               | engagementId, firedAt, impactAt, impactPoint                                                         |
+| weapon → CC   | `fireFailed`              | engagementId, reason                                                                                 |
+| radar → world | `hello`                   | radarId, position, rangeM                                                                            |
+| radar → world | `scan` → `scanResult`     | position, rangeM → observedAt, detections                                                            |
+| radar → world | `targetHit`               | truthId (remove the object a weapon hit)                                                             |
+| server → any  | `error`                   | code, detail                                                                                         |
 
 The exact schemas live in `packages/shared/src/messages.ts`; that file is the source of truth, and this table is a summary. Each program's own browser UI channel is defined in that program's document.
 
-**Ports:** World Simulator `7000` (UI `7001`), Command Center `7100` (UI `7101`), radar UIs `72xx`, weapon UIs `73xx`.
+**Ports:** World Simulator `7000` for radars (UI `7001`), Command Center `7100` (UI `7101`), radar UIs `72xx`, weapon UIs `73xx`.
 
 ---
 
@@ -159,11 +157,11 @@ The exact schemas live in `packages/shared/src/messages.ts`; that file is the so
 Each milestone ends with something you can run and watch.
 
 1. ✅ **Foundation:** monorepo, `shared` package (types, zod schemas, geo utils, earliest-intercept search, key generation, with unit tests), lint and format.
-2. ✅ **World Simulator:** loads cities and waves, moves targets, answers scans, resolves shells, truth map UI with wave controls.
+2. ✅ **World Simulator:** loads waves, moves targets, answers radar scans, removes hit targets, truth map UI with wave controls.
 3. **Command Center registry:** key generation, auto and manual registration, heartbeats, revocation, units panel, persistence.
 4. **Radar Center:** registers, scans, adds noise, computes speed, heading and likelihood, IFF UI. The Command Center fuses tracks and shows them on its map.
 5. **Shot Control:** registers, state machine, UI, range editing from both sides, ammo and reload.
-6. **Engagement:** threat evaluation, assignment, prepare/fire/cancel, approval switch, kill confirmation, re-engagement.
+6. **Engagement:** threat ranking, assignment, prepare/fire/cancel, approval switch, kill confirmation, re-engagement.
 7. **Scenario runner and polish:** the `npm run scenario` launcher, a sample scenario (several radars and weapons, mixed waves), a README.
 
 ---
@@ -171,12 +169,12 @@ Each milestone ends with something you can run and watch.
 ## 7. Decisions log
 
 - **Separate programs** on a network, not one process: they are meant to run on separate devices.
-- **World Simulator** is its own program, so only it knows the truth.
+- **World Simulator** is its own program, so only it knows the truth. **Only radars connect to it.**
 - **Folders:** kebab-case `apps/*` and `packages/*`.
-- **Regions and cities:** defined from the World Simulator program, added later. A small placeholder city file is used until then.
+- **No cities.** The system protects everything, not a list of places. Each map's starting view comes from its program's config.
 - **Default numbers:** the proposed values are starting points, tuned as needed.
 - **Prediction horizon:** not fixed; each weapon's prepare time, shell speed and range decide it.
-- **Hits:** shell flight time = distance ÷ shell speed; no dispersion.
+- **Hits:** shells are not simulated. A computed shot always hits; shell flight time = distance ÷ shell speed only decides _when_. The hit reaches the world through the radar.
 - **Manual position mismatch:** the unit is held as pending for operator approval.
 - **Classification conflicts:** friendly wins if at least one radar reports friendly, unless the Command Center overrides it to enemy.
 - **Reclassification before firing** cancels the shot.

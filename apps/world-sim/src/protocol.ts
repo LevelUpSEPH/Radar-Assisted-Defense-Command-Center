@@ -1,7 +1,7 @@
 // UI channel between the World Simulator server and its truth-map page
 // (DESIGN.md §5). Private to this program; messages are { type, payload }.
 
-import { CitySchema, LatLonSchema, TargetKindSchema } from "@tdts/shared";
+import { LatLonSchema, MapViewSchema, TargetKindSchema } from "@tdts/shared";
 import { z } from "zod";
 
 export const TruthTargetSchema = z.object({
@@ -18,30 +18,21 @@ export const TruthTargetSchema = z.object({
 });
 export type TruthTarget = z.infer<typeof TruthTargetSchema>;
 
-export const TruthShellSchema = z.object({
-  shellId: z.string(),
-  unitId: z.string(),
-  from: LatLonSchema,
-  impactPoint: LatLonSchema,
-  firedAt: z.number(),
-  impactAt: z.number(),
-});
-export type TruthShell = z.infer<typeof TruthShellSchema>;
-
-export const ImpactSchema = z.object({
-  shellId: z.string(),
+/** A target removed after a radar reported a weapon hit; shown briefly on the map. */
+export const KillSchema = z.object({
+  targetId: z.string(),
+  kind: TargetKindSchema,
   point: LatLonSchema,
   at: z.number(),
-  destroyed: z.array(z.string()),
 });
-export type Impact = z.infer<typeof ImpactSchema>;
+export type Kill = z.infer<typeof KillSchema>;
 
-export const ConnectedUnitSchema = z.object({
-  unitId: z.string(),
-  unitType: z.enum(["radar", "weapon", "commandCenter"]),
-  position: LatLonSchema.optional(),
+export const ConnectedRadarSchema = z.object({
+  radarId: z.string(),
+  position: LatLonSchema,
+  rangeM: z.number(),
 });
-export type ConnectedUnit = z.infer<typeof ConnectedUnitSchema>;
+export type ConnectedRadar = z.infer<typeof ConnectedRadarSchema>;
 
 export const WaveRunSchema = z.object({
   runId: z.string(),
@@ -64,7 +55,7 @@ export type WaveFileInfo = z.infer<typeof WaveFileInfoSchema>;
 
 export const LogEntrySchema = z.object({
   at: z.number(),
-  kind: z.enum(["wave", "spawn", "arrive", "destroy", "shell", "impact", "info"]),
+  kind: z.enum(["wave", "spawn", "arrive", "destroy", "info"]),
   text: z.string(),
 });
 export type LogEntry = z.infer<typeof LogEntrySchema>;
@@ -72,9 +63,8 @@ export type LogEntry = z.infer<typeof LogEntrySchema>;
 export const WorldStateSchema = z.object({
   now: z.number(),
   targets: z.array(TruthTargetSchema),
-  shells: z.array(TruthShellSchema),
-  impacts: z.array(ImpactSchema),
-  units: z.array(ConnectedUnitSchema),
+  kills: z.array(KillSchema),
+  radars: z.array(ConnectedRadarSchema),
   waveRuns: z.array(WaveRunSchema),
   log: z.array(LogEntrySchema),
 });
@@ -83,7 +73,7 @@ export type WorldState = z.infer<typeof WorldStateSchema>;
 export const ServerToUiSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("init"),
-    payload: z.object({ cities: z.array(CitySchema), waveFiles: z.array(WaveFileInfoSchema) }),
+    payload: z.object({ view: MapViewSchema, waveFiles: z.array(WaveFileInfoSchema) }),
   }),
   z.object({ type: z.literal("state"), payload: WorldStateSchema }),
   z.object({

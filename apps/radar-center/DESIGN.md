@@ -2,7 +2,7 @@
 
 Part of [TDTS](../../docs/DESIGN.md). Status: **planned** (milestone 4).
 
-A Radar Center is one radar site. It scans the World Simulator for what is physically in range, turns raw detections into tracks with speed, heading and a likelihood of being a flying vehicle, and reports them to the Command Center. Its operator can mark tracks as friendly or enemy. Many Radar Centers run at once, one process each.
+A Radar Center is one radar site, and the **only** kind of program that connects to the World Simulator. It scans it for what is physically in range, turns raw detections into tracks with speed, heading and a likelihood of being a flying vehicle, and reports them to the Command Center. Its operator can mark tracks as friendly or enemy. Many Radar Centers run at once, one process each.
 
 ---
 
@@ -12,7 +12,7 @@ A Radar Center is one radar site. It scans the World Simulator for what is physi
 - Scan on a fixed interval; build and maintain local tracks.
 - Add measurement noise; estimate speed and heading; score vehicle likelihood.
 - Report tracks with an IFF suggestion or the operator's marking.
-- Answer kill checks.
+- Pass hits on to the World Simulator and confirm kills.
 - Operator UI: track list, small map, IFF marking.
 
 Not its job: deciding a track's classification (the Command Center does), or fusing with other radars.
@@ -42,7 +42,7 @@ Start: `npm run dev -w @tdts/radar-center -- --config scenario/radars/north.json
 ## 3. Start-up
 
 1. Connect to the Command Center and send `register` (`rangeM` as capability). Wait for `registered`. On `pending`, keep connected and show "waiting for operator approval". On `rejected`, show the reason and stop.
-2. Connect to the World Simulator and send `hello { unitId, unitType: "radar", position }`.
+2. Connect to the World Simulator and send `hello { radarId: unitId, position, rangeM }`.
 3. Start the scan loop and the heartbeat (`HEARTBEAT_INTERVAL_MS`).
 4. If either connection drops, retry every 2 s; scanning pauses until both are up.
 5. On `revoked`, stop everything and show it in the UI.
@@ -66,12 +66,14 @@ A track not seen for `RADAR_TRACK_DROP_SCANS` (3) scans is dropped.
 
 ---
 
-## 5. Kill check
+## 5. Kill confirmation
 
-On `confirmKill { checkId, position, radiusM }`, the radar waits for its **next** scan, then:
+On `confirmKill { checkId, radarTrackId }`, a weapon's shot has arrived at the object behind that track. A computed shot always hits, so the radar:
 
-- no track within `radiusM` of `position` → `killReport { checkId, destroyed: true }`;
-- otherwise → `killReport { checkId, destroyed: false, survivingRadarTrackId }`.
+1. sends `targetHit { truthId }` to the World Simulator for the object linked to `radarTrackId` (it knows which one from its scans);
+2. waits for its next scan, then answers `killReport { checkId, destroyed }`, where `destroyed` is true if the object is gone.
+
+If the track is unknown (already dropped), it answers `destroyed: true` without touching the world.
 
 ---
 

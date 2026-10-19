@@ -1,4 +1,4 @@
-import type { City } from "@tdts/shared";
+import type { MapView } from "@tdts/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ServerToUi, UiToServer, WaveFileInfo, WorldState } from "../protocol";
 
@@ -6,7 +6,7 @@ const RECONNECT_MS = 1_000;
 
 export interface WorldSocket {
   connected: boolean;
-  cities: City[];
+  view: MapView | null;
   waveFiles: WaveFileInfo[];
   state: WorldState | null;
   error: string | null;
@@ -17,7 +17,7 @@ export interface WorldSocket {
 /** Connects to the server's /ws, reconnecting on drop, and keeps the latest data. */
 export function useWorldSocket(): WorldSocket {
   const [connected, setConnected] = useState(false);
-  const [cities, setCities] = useState<City[]>([]);
+  const [view, setView] = useState<MapView | null>(null);
   const [waveFiles, setWaveFiles] = useState<WaveFileInfo[]>([]);
   const [state, setState] = useState<WorldState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export function useWorldSocket(): WorldSocket {
         const msg = JSON.parse(event.data) as ServerToUi;
         switch (msg.type) {
           case "init":
-            setCities(msg.payload.cities);
+            setView(msg.payload.view);
             setWaveFiles(msg.payload.waveFiles);
             break;
           case "state":
@@ -77,5 +77,5 @@ export function useWorldSocket(): WorldSocket {
   }, []);
   const clearError = useCallback(() => setError(null), []);
 
-  return { connected, cities, waveFiles, state, error, clearError, send };
+  return { connected, view, waveFiles, state, error, clearError, send };
 }
