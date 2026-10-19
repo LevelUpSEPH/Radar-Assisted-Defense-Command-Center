@@ -26,6 +26,11 @@ export function UnitsPanel({
                   {u.name}
                 </span>
                 <span className="muted small">{describe(u)}</span>
+                {u.deviceId && (
+                  <span className="muted small" title="Fingerprint of the unit's device key">
+                    device <code className="fingerprint">{u.deviceId}</code>
+                  </span>
+                )}
                 {u.status === "PENDING" && u.distanceM !== undefined && (
                   <>
                     <span className="warn small">

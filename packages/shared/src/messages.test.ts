@@ -16,6 +16,7 @@ describe("createMessage / parseMessage", () => {
     const msg = createMessage<ToCommandCenter, "register">("register", {
       unitType: "weapon",
       key: "TDTS-0000-0000-0000",
+      publicKey: "AAAA",
       name: "Battery Alpha",
       position,
       capabilities: {
@@ -42,6 +43,7 @@ describe("createMessage / parseMessage", () => {
     const msg = createMessage<ToCommandCenter, "register">("register", {
       unitType: "radar",
       key: "k",
+      publicKey: "AAAA",
       name: "Radar North",
       position,
       capabilities: { rangeM: 60_000 },

@@ -41,7 +41,7 @@ Start: `npm run dev -w @tdts/radar-center -- --config scenario/radars/north.json
 
 ## 3. Start-up
 
-1. Connect to the Command Center and send `register` (`rangeM` as capability). Wait for `registered`. On `pending`, keep connected and show "waiting for operator approval". On `rejected`, show the reason and stop.
+1. Load its device key pair from its identity file (created on first start; the private key never leaves the device). Connect to the Command Center and send `register` with its public key (`rangeM` as capability). Answer the `challenge` by signing the nonce. Wait for `registered`. On `pending`, keep connected and show "waiting for operator approval". On `rejected`, show the reason and stop.
 2. Connect to the World Simulator and send `hello { radarId: unitId, position, rangeM }`.
 3. Start the scan loop and the heartbeat (`HEARTBEAT_INTERVAL_MS`).
 4. If either connection drops, retry every 2 s; scanning pauses until both are up.

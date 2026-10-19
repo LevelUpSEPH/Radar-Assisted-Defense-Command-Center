@@ -39,7 +39,7 @@ Not its job: choosing targets, or deciding whether a shot killed.
 
 Start: `npm run dev -w @tdts/shot-control -- --config scenario/weapons/alpha.json`.
 
-Start-up, reconnect and revocation behave like the Radar Center's: register, then heartbeats. A weapon **never connects to the World Simulator**: it shoots where it is told.
+Start-up, reconnect and revocation behave like the Radar Center's: load the device identity, register, answer the challenge, then heartbeats. A weapon **never connects to the World Simulator**: it shoots where it is told.
 
 ---
 

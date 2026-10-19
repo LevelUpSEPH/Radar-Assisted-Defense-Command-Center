@@ -55,22 +55,40 @@ export function startUnitServer(
 
       switch (msg.type) {
         case "register": {
+          // Step 1: key checks, then a challenge only the real device can sign.
           const result = registry.register(connId, msg.payload, now);
-          answerRegistration(ws, result);
           const who = `${msg.payload.unitType} "${msg.payload.name}"`;
-          if (result.kind === "registered")
-            console.log(`[units] ${who} registered as ${result.unitId}`);
-          if (result.kind === "pending") {
-            console.log(
-              `[units] ${who} pending: ${Math.round(result.distanceM)} m from expected position`,
-            );
-          }
           if (result.kind === "rejected") {
+            answerRegistration(ws, result);
             console.log(`[units] ${who} rejected: ${result.reason}`);
             ws.close();
+            events.onChange();
+          } else {
+            send(
+              ws,
+              createMessage<FromCommandCenter, "challenge">("challenge", { nonce: result.nonce }),
+            );
           }
-          events.onRegister(result);
-          events.onChange();
+          return;
+        }
+        case "challengeResponse": {
+          // Step 2: verify the signature, then register, hold as pending, or reject.
+          void registry.answerChallenge(connId, msg.payload.signature, now).then((result) => {
+            if (ws.readyState !== ws.OPEN) return;
+            answerRegistration(ws, result);
+            if (result.kind === "registered") console.log(`[units] ${result.unitId} registered`);
+            if (result.kind === "pending") {
+              console.log(
+                `[units] ${connId} pending: ${Math.round(result.distanceM)} m from expected position`,
+              );
+            }
+            if (result.kind === "rejected") {
+              console.log(`[units] ${connId} rejected: ${result.reason}`);
+              ws.close();
+            }
+            events.onRegister(result);
+            events.onChange();
+          });
           return;
         }
         case "heartbeat":

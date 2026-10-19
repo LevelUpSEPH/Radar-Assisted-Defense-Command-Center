@@ -124,27 +124,29 @@ Every message uses one envelope:
 { "type": "prepare", "msgId": "uuid", "ts": 1760000000000, "payload": {} }
 ```
 
-| Direction     | type                      | payload (summary)                                                                                    |
-| ------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| unit → CC     | `register`                | key, unitType, name, position, capabilities (radar: rangeM; weapon: ranges, ammo, times, shellSpeed) |
-| CC → unit     | `registered` / `rejected` | unitId / reason                                                                                      |
-| CC → unit     | `pending`                 | POSITION_MISMATCH, distanceM (manual key, waiting for operator)                                      |
-| unit → CC     | `heartbeat`               | —                                                                                                    |
-| CC → unit     | `revoked`                 | —                                                                                                    |
-| radar → CC    | `tracks`                  | list of radar tracks, each with its current IFF report                                               |
-| CC → radar    | `confirmKill`             | checkId, radarTrackId (a weapon hit it)                                                              |
-| radar → CC    | `killReport`              | checkId, destroyed                                                                                   |
-| CC → weapon   | `prepare`                 | engagementId, track                                                                                  |
-| CC → weapon   | `trackUpdate`             | engagementId, track                                                                                  |
-| CC → weapon   | `fire` / `cancel`         | engagementId                                                                                         |
-| CC → weapon   | `setRanges`               | minRangeM, maxRangeM                                                                                 |
-| weapon → CC   | `status`                  | state, ammo, ranges, engagementId, stateUntil                                                        |
-| weapon → CC   | `shotFired`               | engagementId, firedAt, impactAt, impactPoint                                                         |
-| weapon → CC   | `fireFailed`              | engagementId, reason                                                                                 |
-| radar → world | `hello`                   | radarId, position, rangeM                                                                            |
-| radar → world | `scan` → `scanResult`     | position, rangeM → observedAt, detections                                                            |
-| radar → world | `targetHit`               | truthId (remove the object a weapon hit)                                                             |
-| server → any  | `error`                   | code, detail                                                                                         |
+| Direction     | type                      | payload (summary)                                               |
+| ------------- | ------------------------- | --------------------------------------------------------------- |
+| unit → CC     | `register`                | key, unitType, device publicKey, name, position, capabilities   |
+| CC → unit     | `challenge`               | nonce (sign it to prove you hold the device key)                |
+| unit → CC     | `challengeResponse`       | signature                                                       |
+| CC → unit     | `registered` / `rejected` | unitId / reason                                                 |
+| CC → unit     | `pending`                 | POSITION_MISMATCH, distanceM (manual key, waiting for operator) |
+| unit → CC     | `heartbeat`               | —                                                               |
+| CC → unit     | `revoked`                 | —                                                               |
+| radar → CC    | `tracks`                  | list of radar tracks, each with its current IFF report          |
+| CC → radar    | `confirmKill`             | checkId, radarTrackId (a weapon hit it)                         |
+| radar → CC    | `killReport`              | checkId, destroyed                                              |
+| CC → weapon   | `prepare`                 | engagementId, track                                             |
+| CC → weapon   | `trackUpdate`             | engagementId, track                                             |
+| CC → weapon   | `fire` / `cancel`         | engagementId                                                    |
+| CC → weapon   | `setRanges`               | minRangeM, maxRangeM                                            |
+| weapon → CC   | `status`                  | state, ammo, ranges, engagementId, stateUntil                   |
+| weapon → CC   | `shotFired`               | engagementId, firedAt, impactAt, impactPoint                    |
+| weapon → CC   | `fireFailed`              | engagementId, reason                                            |
+| radar → world | `hello`                   | radarId, position, rangeM                                       |
+| radar → world | `scan` → `scanResult`     | position, rangeM → observedAt, detections                       |
+| radar → world | `targetHit`               | truthId (remove the object a weapon hit)                        |
+| server → any  | `error`                   | code, detail                                                    |
 
 The exact schemas live in `packages/shared/src/messages.ts`; that file is the source of truth, and this table is a summary. Each program's own browser UI channel is defined in that program's document.
 
@@ -176,5 +178,6 @@ Each milestone ends with something you can run and watch.
 - **Prediction horizon:** not fixed; each weapon's prepare time, shell speed and range decide it.
 - **Hits:** shells are not simulated. A computed shot always hits; shell flight time = distance ÷ shell speed only decides _when_. The hit reaches the world through the radar.
 - **Manual position mismatch:** the unit is held as pending for operator approval.
+- **Unit identity:** each unit proves itself with its own Ed25519 device key (challenge and signature); a bound registration key only accepts that device. MAC/IP addresses were considered and rejected: they are claims, not proof.
 - **Classification conflicts:** friendly wins if at least one radar reports friendly, unless the Command Center overrides it to enemy.
 - **Reclassification before firing** cancels the shot.

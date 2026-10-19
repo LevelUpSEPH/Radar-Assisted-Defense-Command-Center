@@ -57,6 +57,10 @@ export const UnitRecordSchema = unitBody({
   key: z.string(),
   name: z.string(),
   position: LatLonSchema,
+  /** The device's Ed25519 public key; only this device may use the key again. */
+  publicKey: z.string().optional(),
+  /** Short fingerprint of `publicKey`, for display. */
+  deviceId: z.string().optional(),
   registeredAt: z.number(),
 });
 export type UnitRecord = z.infer<typeof UnitRecordSchema>;
@@ -71,6 +75,7 @@ export const UnitViewSchema = unitBody({
   key: z.string(),
   name: z.string(),
   position: LatLonSchema,
+  deviceId: z.string().optional(),
   status: UnitStatusSchema,
   /** PENDING only: how far it connected from the key's expected position. */
   distanceM: z.number().optional(),

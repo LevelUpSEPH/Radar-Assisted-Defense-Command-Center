@@ -49,6 +49,10 @@ export const RejectReasonSchema = z.enum([
   "TYPE_MISMATCH",
   "ALREADY_CONNECTED",
   "REJECTED_BY_OPERATOR",
+  /** The key is bound to a different device (another public key). */
+  "DEVICE_MISMATCH",
+  /** The challenge signature didn't verify. */
+  "BAD_SIGNATURE",
 ]);
 export type RejectReason = z.infer<typeof RejectReasonSchema>;
 
@@ -118,6 +122,8 @@ const RegisterPayload = z.discriminatedUnion("unitType", [
   z.object({
     unitType: z.literal("radar"),
     key: z.string(),
+    /** The device's Ed25519 public key (raw, base64). */
+    publicKey: z.string().min(1),
     name: z.string().min(1),
     position: LatLonSchema,
     capabilities: RadarCapabilitiesSchema,
@@ -125,6 +131,7 @@ const RegisterPayload = z.discriminatedUnion("unitType", [
   z.object({
     unitType: z.literal("weapon"),
     key: z.string(),
+    publicKey: z.string().min(1),
     name: z.string().min(1),
     position: LatLonSchema,
     capabilities: WeaponCapabilitiesSchema,
@@ -133,6 +140,8 @@ const RegisterPayload = z.discriminatedUnion("unitType", [
 
 export const ToCommandCenterSchema = z.discriminatedUnion("type", [
   message("register", RegisterPayload),
+  /** Proof of identity: the `challenge` nonce signed with the device's private key. */
+  message("challengeResponse", z.object({ signature: z.string().min(1) })),
   message("heartbeat", Empty),
   // radar
   message("tracks", z.object({ scanAt: EpochMs, tracks: z.array(RadarTrackSchema) })),
@@ -160,6 +169,8 @@ export const ToCommandCenterSchema = z.discriminatedUnion("type", [
 // ---------------------------------------------------------------- Command Center -> unit
 
 export const FromCommandCenterSchema = z.discriminatedUnion("type", [
+  /** Answer to `register`: sign this nonce to prove you hold the device key. */
+  message("challenge", z.object({ nonce: z.string() })),
   message("registered", z.object({ unitId: Id })),
   message("rejected", z.object({ reason: RejectReasonSchema, detail: z.string().optional() })),
   /** Manual key, position mismatch: connected but on hold until an operator decides. */

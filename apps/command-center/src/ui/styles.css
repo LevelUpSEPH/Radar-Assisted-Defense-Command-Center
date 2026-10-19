@@ -434,3 +434,8 @@ button.link:hover:not(:disabled) {
   gap: 8px;
   margin-top: 6px;
 }
+
+code.fingerprint {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+}

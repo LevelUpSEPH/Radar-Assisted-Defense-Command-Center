@@ -1,11 +1,20 @@
 // Unit registration (DESIGN.md §3). Pure logic: connections are plain ids, time
 // is passed in, and the caller does the sockets and saving.
+//
+// Registering takes two steps:
+//   1. register          key checks; the unit gets a random challenge
+//   2. answerChallenge   the signature proves it holds the device's private key;
+//                        then auto / manual / pending rules apply
+// A key that is bound to a device only ever accepts that device again.
 
 import {
+  deviceFingerprint,
   distanceM,
   HEARTBEAT_TIMEOUT_MS,
   isValidKeyFormat,
   MANUAL_MATCH_TOLERANCE_M,
+  newChallengeNonce,
+  verifyChallenge,
   type PayloadOf,
   type RejectReason,
   type ToCommandCenter,
@@ -15,15 +24,32 @@ import type { KeyStore } from "./keys";
 
 export type RegisterRequest = PayloadOf<ToCommandCenter, "register">;
 
+type Rejected = { kind: "rejected"; reason: RejectReason; detail?: string };
+
+/** Answer to step 1. */
+export type ChallengeResult = { kind: "challenge"; nonce: string } | Rejected;
+
+/** Answer to step 2. */
 export type RegisterResult =
-  | { kind: "registered"; unitId: string }
-  | { kind: "pending"; distanceM: number }
-  | { kind: "rejected"; reason: RejectReason; detail?: string };
+  { kind: "registered"; unitId: string } | { kind: "pending"; distanceM: number } | Rejected;
+
+/** What a verified device brings along. */
+interface VerifiedRequest {
+  request: RegisterRequest;
+  deviceId: string;
+}
 
 type Connection =
   | { kind: "new"; lastSeen: number }
-  | { kind: "registered"; key: string; unitId: string; lastSeen: number }
-  | { kind: "pending"; key: string; request: RegisterRequest; distanceM: number; lastSeen: number };
+  | { kind: "challenged"; key: string; request: RegisterRequest; nonce: string; lastSeen: number }
+  | {
+      kind: "pending";
+      key: string;
+      verified: VerifiedRequest;
+      distanceM: number;
+      lastSeen: number;
+    }
+  | { kind: "registered"; key: string; unitId: string; lastSeen: number };
 
 const UNIT_ID_PREFIX = { radar: "RDR", weapon: "WPN" } as const;
 
@@ -48,9 +74,13 @@ export class Registry {
     this.connections.delete(connId);
   }
 
+  /**
+   * Heartbeats only count once a unit has proven who it is (registered or
+   * pending). A connection that never answers its challenge times out.
+   */
   heartbeat(connId: string, now: number): void {
     const conn = this.connections.get(connId);
-    if (conn) conn.lastSeen = now;
+    if (conn && (conn.kind === "registered" || conn.kind === "pending")) conn.lastSeen = now;
   }
 
   /** Connections that missed heartbeats for HEARTBEAT_TIMEOUT_MS; the caller closes them. */
@@ -72,9 +102,9 @@ export class Registry {
     return null;
   }
 
-  // ------------------------------------------------------------- registration
+  // ------------------------------------------------------------- step 1: key checks
 
-  register(connId: string, req: RegisterRequest, now: number): RegisterResult {
+  register(connId: string, req: RegisterRequest, now: number): ChallengeResult {
     const conn = this.connections.get(connId);
     if (!conn) throw new Error(`unknown connection ${connId}`);
     if (conn.kind !== "new") {
@@ -85,13 +115,64 @@ export class Registry {
     if (!key) return { kind: "rejected", reason: "INVALID_KEY" };
     if (key.status === "REVOKED") return { kind: "rejected", reason: "REVOKED" };
     if (key.unitType !== req.unitType) {
-      return {
-        kind: "rejected",
-        reason: "TYPE_MISMATCH",
-        detail: `key is for a ${key.unitType}`,
-      };
+      return { kind: "rejected", reason: "TYPE_MISMATCH", detail: `key is for a ${key.unitType}` };
     }
     if (this.connectionWithKey(key.key)) return { kind: "rejected", reason: "ALREADY_CONNECTED" };
+
+    // A bound key belongs to one device. Units saved before device keys existed
+    // have no public key yet; they adopt the first device that proves itself.
+    const boundKey = key.unitId ? this.units.get(key.unitId)?.publicKey : undefined;
+    if (boundKey && boundKey !== req.publicKey) {
+      return {
+        kind: "rejected",
+        reason: "DEVICE_MISMATCH",
+        detail: "this key belongs to another device",
+      };
+    }
+
+    const nonce = newChallengeNonce();
+    this.connections.set(connId, {
+      kind: "challenged",
+      key: key.key,
+      request: req,
+      nonce,
+      lastSeen: now,
+    });
+    return { kind: "challenge", nonce };
+  }
+
+  // ------------------------------------------------------------- step 2: proof, then rules
+
+  async answerChallenge(connId: string, signature: string, now: number): Promise<RegisterResult> {
+    const conn = this.connections.get(connId);
+    if (conn?.kind !== "challenged") {
+      return { kind: "rejected", reason: "BAD_SIGNATURE", detail: "no challenge outstanding" };
+    }
+    const { key, request, nonce } = conn;
+    const valid = await verifyChallenge(request.publicKey, nonce, key, signature);
+    const deviceId = await deviceFingerprint(request.publicKey);
+
+    // The connection may have closed (or its key been deleted) while verifying.
+    if (this.connections.get(connId) !== conn) {
+      return { kind: "rejected", reason: "INVALID_KEY", detail: "connection or key went away" };
+    }
+    if (!valid) {
+      this.connections.delete(connId);
+      return { kind: "rejected", reason: "BAD_SIGNATURE" };
+    }
+    return this.admit(connId, key, { request, deviceId }, now);
+  }
+
+  /** The device is proven; apply the manual-position rule and register or hold it. */
+  private admit(
+    connId: string,
+    keyId: string,
+    verified: VerifiedRequest,
+    now: number,
+  ): RegisterResult {
+    const key = this.keys.get(keyId);
+    if (!key) return { kind: "rejected", reason: "INVALID_KEY" };
+    const req = verified.request;
 
     // Manual keys: the unit must be where the operator said it would be. Once
     // a unit is accepted (directly or by approval), its accepted position is
@@ -106,8 +187,8 @@ export class Registry {
       if (off > MANUAL_MATCH_TOLERANCE_M) {
         this.connections.set(connId, {
           kind: "pending",
-          key: key.key,
-          request: req,
+          key: keyId,
+          verified,
           distanceM: off,
           lastSeen: now,
         });
@@ -115,17 +196,17 @@ export class Registry {
       }
     }
 
-    const unitId = this.bind(key.key, req, now);
-    this.connections.set(connId, { kind: "registered", key: key.key, unitId, lastSeen: now });
+    const unitId = this.bind(keyId, verified, now);
+    this.connections.set(connId, { kind: "registered", key: keyId, unitId, lastSeen: now });
     return { kind: "registered", unitId };
   }
 
   /**
    * Creates (or, for a key that is already bound, updates) the unit record.
    * A reconnecting unit keeps its id; its reported name, position and
-   * capabilities replace the saved ones.
+   * capabilities replace the saved ones. The device key is recorded.
    */
-  private bind(key: string, req: RegisterRequest, now: number): string {
+  private bind(key: string, { request: req, deviceId }: VerifiedRequest, now: number): string {
     const existing = this.keys.get(key)?.unitId;
     const unitId = existing ?? this.nextUnitId(req.unitType);
     const base = {
@@ -133,6 +214,8 @@ export class Registry {
       key,
       name: req.name,
       position: req.position,
+      publicKey: req.publicKey,
+      deviceId,
       registeredAt: this.units.get(unitId)?.registeredAt ?? now,
     };
     this.units.set(
@@ -163,7 +246,7 @@ export class Registry {
     const connId = this.connectionWithKey(key);
     const conn = connId ? this.connections.get(connId) : undefined;
     if (!connId || conn?.kind !== "pending") throw new Error(`no pending unit with key ${key}`);
-    const unitId = this.bind(key, conn.request, now);
+    const unitId = this.bind(key, conn.verified, now);
     this.connections.set(connId, { kind: "registered", key, unitId, lastSeen: conn.lastSeen });
     return { connId, unitId };
   }
@@ -207,12 +290,13 @@ export class Registry {
     for (const c of this.connections.values()) {
       if (c.kind === "registered") online.add(c.unitId);
       if (c.kind === "pending") {
-        const r = c.request;
+        const r = c.verified.request;
         const base = {
           unitId: null,
           key: c.key,
           name: r.name,
           position: r.position,
+          deviceId: c.verified.deviceId,
           status: "PENDING" as const,
           distanceM: c.distanceM,
         };
@@ -225,7 +309,7 @@ export class Registry {
     }
     const registered: UnitView[] = [...this.units.values()]
       .sort((a, b) => a.unitId.localeCompare(b.unitId))
-      .map((u) => ({
+      .map(({ publicKey: _publicKey, registeredAt: _registeredAt, ...u }) => ({
         ...u,
         status: online.has(u.unitId) ? "ONLINE" : "OFFLINE",
       }));

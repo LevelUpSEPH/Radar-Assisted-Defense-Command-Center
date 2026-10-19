@@ -1,6 +1,6 @@
 # Command Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) piece 3 (units register with keys, heartbeats, units list and map markers) and piece 4 (approve or reject pending units) done.
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) piece 3 (units register with keys, heartbeats, units list and map markers), piece 4 (approve or reject pending units) and piece 5 (device keys) done.
 
 The Command Center is the brain of the network. It registers radars and weapons, builds one picture of the sky from all radar reports, decides what is an enemy, and tells weapons when to prepare and fire. It never sees ground truth and **never connects to the World Simulator**: everything it knows comes from radar and weapon reports.
 
@@ -60,11 +60,26 @@ All keys are created in the Command Center UI.
 4. Outside the tolerance: the Command Center replies `pending { POSITION_MISMATCH, distanceM }`. The unit stays connected, but gets no tasks and its reports are ignored. The operator **approves** (binds it where it actually is, and it gets `registered`) or **rejects** it (`rejected { REJECTED_BY_OPERATOR }`, disconnected, key stays `ISSUED` so the right device can still use it).
 5. Once a manual key is bound, the 2 km check on later connections is against the unit's **last accepted position**, so an approved unit can reconnect from the same spot; moving 2 km or more from there makes it pending again.
 
+### Device keys (proving identity)
+
+A registration key is a shared secret: anyone who copies it could pretend to be the unit. MAC and IP addresses don't fix that, because a device can claim any MAC, the server can't even see it over a WebSocket, and IPs are spoofable and change. Instead, each unit proves who it is with a key only it holds:
+
+1. **Each device has its own Ed25519 key pair**, kept in a local identity file. The private key never leaves the device.
+2. `register` carries the device's **public key**. If the key checks pass, the Command Center answers with `challenge { nonce }`: 32 random bytes, new for every connection.
+3. The unit answers `challengeResponse { signature }`: the nonce, bound to its registration key, signed with its private key. Only then do the auto, manual and pending rules run.
+4. A wrong signature is `rejected { BAD_SIGNATURE }`. A connection that never answers times out (heartbeats don't count until the challenge is answered).
+5. **When a key is bound, it is bound to that device.** Later connections must present the same public key, or they get `rejected { DEVICE_MISMATCH }`. A copied registration key is useless without the device's private key. To replace a device, delete its key and issue a new one.
+6. The operator sees each unit's **device fingerprint** (first 8 bytes of the SHA-256 of its public key) in the units list.
+
+Units saved before device keys existed have no public key yet; they adopt the first device that proves itself. Without TLS the exchange could be watched on the network, but a watcher still can't sign a fresh challenge; TLS can be added later without changing this design.
+
 ### Rules for both modes
 
 | Situation                                 | Result                                                            |
 | ----------------------------------------- | ----------------------------------------------------------------- |
 | Unknown key                               | `rejected { INVALID_KEY }`                                        |
+| Bound key, different device               | `rejected { DEVICE_MISMATCH }`                                    |
+| Challenge signature doesn't verify        | `rejected { BAD_SIGNATURE }`                                      |
 | Revoked key                               | `rejected { REVOKED }`                                            |
 | Key for the other unit type               | `rejected { TYPE_MISMATCH }`                                      |
 | Key already in use by a live connection   | `rejected { ALREADY_CONNECTED }`                                  |
@@ -76,7 +91,7 @@ Only `register` is accepted before registration; anything else gets `error { NOT
 
 ### Persistence
 
-Keys and registered units (id, type, name, position, capabilities) are saved to `dataFile` on every change, so a restart keeps them. Tracks and engagements are not saved.
+Keys and registered units (id, type, name, position, capabilities, device public key) are saved to `dataFile` on every change, so a restart keeps them. Tracks and engagements are not saved.
 
 ---
 
