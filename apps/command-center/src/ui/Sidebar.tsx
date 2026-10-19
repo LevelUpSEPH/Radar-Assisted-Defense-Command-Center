@@ -1,7 +1,8 @@
+import { KeysPanel } from "./KeysPanel";
 import type { CommandSocket } from "./useCommandSocket";
 
 export function Sidebar({ cc }: { cc: CommandSocket }) {
-  const { connected } = cc;
+  const { connected, state, error, clearError, send } = cc;
 
   return (
     <aside className="sidebar">
@@ -14,6 +15,17 @@ export function Sidebar({ cc }: { cc: CommandSocket }) {
           {connected ? "Live" : "Disconnected"}
         </span>
       </header>
+
+      {error && (
+        <div className="error" role="alert">
+          <span>{error}</span>
+          <button className="link" onClick={clearError} aria-label="Dismiss error">
+            ✕
+          </button>
+        </div>
+      )}
+
+      <KeysPanel keys={state?.keys ?? []} disabled={!connected} send={send} />
     </aside>
   );
 }

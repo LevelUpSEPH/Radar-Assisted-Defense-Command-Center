@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import type { CommandState, ServerToUi } from "../protocol";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CommandState, ServerToUi, UiToServer } from "../protocol";
 
 const RECONNECT_MS = 1_000;
 
@@ -7,12 +7,17 @@ export interface CommandSocket {
   /** Page ↔ Command Center server. */
   connected: boolean;
   state: CommandState | null;
+  /** Last error the server sent back for one of this page's commands. */
+  error: string | null;
+  clearError(): void;
+  send(msg: UiToServer): void;
 }
 
 /** Connects to the server's /ws, reconnecting on drop, and keeps the latest state. */
 export function useCommandSocket(): CommandSocket {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<CommandState | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const socket = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -37,6 +42,7 @@ export function useCommandSocket(): CommandSocket {
         if (!isCurrent()) return;
         const msg = JSON.parse(event.data) as ServerToUi;
         if (msg.type === "state") setState(msg.payload);
+        else if (msg.type === "error") setError(msg.payload.detail);
       };
     };
     connect();
@@ -50,5 +56,10 @@ export function useCommandSocket(): CommandSocket {
     };
   }, []);
 
-  return { connected, state };
+  const send = useCallback((msg: UiToServer) => {
+    if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify(msg));
+  }, []);
+  const clearError = useCallback(() => setError(null), []);
+
+  return { connected, state, error, clearError, send };
 }

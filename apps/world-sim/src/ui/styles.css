@@ -313,3 +313,8 @@ button.link {
   color: var(--text);
   border-color: var(--border);
 }
+
+button.link:hover:not(:disabled) {
+  background: none;
+  text-decoration: underline;
+}

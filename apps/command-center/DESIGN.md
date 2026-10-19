@@ -1,6 +1,6 @@
 # Command Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress** (piece 1, the map, done).
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map) and piece 2 (generate, list and delete keys, saved to `dataFile`) done.
 
 The Command Center is the brain of the network. It registers radars and weapons, builds one picture of the sky from all radar reports, decides what is an enemy, and tells weapons when to prepare and fire. It never sees ground truth and **never connects to the World Simulator**: everything it knows comes from radar and weapon reports.
 
@@ -43,6 +43,7 @@ All keys are created in the Command Center UI.
 - **Key format:** `TDTS-XXXX-XXXX-XXXX` (random, 60 bits, Crockford base32; `generateKey()` in shared).
 - **Key fields:** `key`, `unitType` (`radar` | `weapon`), `mode` (`auto` | `manual`), optional `name`, optional `expectedPosition`, `status`, `unitId` once bound.
 - **Key status:** `ISSUED → BOUND → REVOKED`. Keys **never expire**. `REVOKED` is final.
+- **Deleting** a key removes it for good (after an on-screen confirmation). A unit presenting it later gets `INVALID_KEY`; a unit currently using it is disconnected, the same as a revoke.
 
 ### Automatic registration
 
@@ -155,7 +156,7 @@ The weapon reports the shot, the Command Center tells the radar, the radar repor
 ## 10. Operator UI (port 7101)
 
 - **Map:** radars (with range circles), weapons (min/max range rings, state, ammo), system tracks (colored by classification, with heading vector and predicted intercept point), shots in flight (launch point → aim point, with arrival countdown).
-- **Keys panel:** generate (auto or manual with name + approximate position), list with status, revoke, copy.
+- **Keys panel:** generate (auto or manual with name + approximate position), list with status, copy, delete (with confirmation), revoke.
 - **Units panel:** online/offline/pending, approve/reject pending units.
 - **Tracks panel:** classification, likelihood, reporting radars, override controls.
 - **Engagements panel:** state, weapon, target, approve/reject; fire-mode switch.
