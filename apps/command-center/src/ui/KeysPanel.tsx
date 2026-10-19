@@ -153,6 +153,7 @@ function KeyRow({
   };
 
   const details = [
+    record.unitId && `used by ${record.unitId}`,
     record.unitType,
     record.mode,
     record.name,

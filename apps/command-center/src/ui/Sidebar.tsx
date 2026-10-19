@@ -1,4 +1,5 @@
 import { KeysPanel } from "./KeysPanel";
+import { UnitsPanel } from "./UnitsPanel";
 import type { CommandSocket } from "./useCommandSocket";
 
 export function Sidebar({ cc }: { cc: CommandSocket }) {
@@ -24,6 +25,8 @@ export function Sidebar({ cc }: { cc: CommandSocket }) {
           </button>
         </div>
       )}
+
+      <UnitsPanel units={state?.units ?? []} />
 
       <KeysPanel keys={state?.keys ?? []} disabled={!connected} send={send} />
     </aside>

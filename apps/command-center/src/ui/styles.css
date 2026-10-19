@@ -413,3 +413,18 @@ button.link:hover:not(:disabled) {
   background: none;
   text-decoration: underline;
 }
+
+/* ---------------------------------------------------------------- units panel */
+
+:root {
+  --warn: #fbbf24;
+}
+
+.warn {
+  color: var(--warn);
+}
+
+.pill-warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+}

@@ -1,6 +1,6 @@
 # Command Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map) and piece 2 (generate, list and delete keys, saved to `dataFile`) done.
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) and piece 3 (units register with keys, heartbeats, units list and map markers) done. Next: approving or rejecting pending units.
 
 The Command Center is the brain of the network. It registers radars and weapons, builds one picture of the sky from all radar reports, decides what is an enemy, and tells weapons when to prepare and fire. It never sees ground truth and **never connects to the World Simulator**: everything it knows comes from radar and weapon reports.
 
@@ -164,7 +164,19 @@ The weapon reports the shot, the Command Center tells the radar, the radar repor
 
 ---
 
-## 11. Code layout (planned)
+## 11. Trying it without real units
+
+Until the Radar Center and Shot Control exist, a dev tool stands in for them:
+
+```bash
+npm run fake-unit -w @tdts/command-center -- --type radar --key TDTS-XXXX-XXXX-XXXX --lat 47.45 --lon 8.55
+```
+
+Options: `--type radar|weapon`, `--key`, `--name`, `--lat`, `--lon`, `--no-heartbeat` (to see a timeout), `--url`. It prints every reply and stays connected until Ctrl+C.
+
+---
+
+## 12. Code layout (planned)
 
 ```
 apps/command-center/src/

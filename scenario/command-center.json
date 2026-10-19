@@ -1,4 +1,11 @@
 {
+  "port": 7100,
   "uiPort": 7101,
-  "view": { "center": { "lat": 47.2, "lon": 8.0 }, "zoom": 8 }
+  "view": {
+    "center": {
+      "lat": 47.2,
+      "lon": 8.0
+    },
+    "zoom": 8
+  }
 }

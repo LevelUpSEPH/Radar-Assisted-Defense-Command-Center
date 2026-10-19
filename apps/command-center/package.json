@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false --ignore \"src/ui/**\" src/server/main.ts",
     "start": "tsx src/server/main.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "fake-unit": "tsx tools/fake-unit.ts"
   },
   "dependencies": {
     "@tdts/shared": "*",

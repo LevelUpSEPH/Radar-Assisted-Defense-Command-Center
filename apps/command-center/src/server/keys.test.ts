@@ -107,13 +107,13 @@ describe("data file", () => {
     const path = join(dir, "nested", "state.json");
     const store = new KeyStore();
     store.generate({ mode: "auto", unitType: "radar" }, T0);
-    await saveDataFile(path, { keys: store.list() });
-    expect(await loadDataFile(path)).toEqual({ keys: store.list() });
+    await saveDataFile(path, { keys: store.list(), units: [] });
+    expect(await loadDataFile(path)).toEqual({ keys: store.list(), units: [] });
   });
 
   it("treats a missing file as empty and refuses a corrupt one", async () => {
     dir = await mkdtemp(join(tmpdir(), "tdts-cc-"));
-    expect(await loadDataFile(join(dir, "none.json"))).toEqual({ keys: [] });
+    expect(await loadDataFile(join(dir, "none.json"))).toEqual({ keys: [], units: [] });
     await writeFile(join(dir, "bad.json"), "{oops");
     await expect(loadDataFile(join(dir, "bad.json"))).rejects.toThrow("invalid JSON");
   });

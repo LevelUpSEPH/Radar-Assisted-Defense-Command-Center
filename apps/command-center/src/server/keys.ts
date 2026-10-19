@@ -32,6 +32,13 @@ export class KeyStore {
     return record;
   }
 
+  /** Marks the key as used by `unitId`. */
+  bind(key: string, unitId: string): void {
+    const record = this.keys.get(key);
+    if (!record) throw new Error(`unknown key ${key}`);
+    this.keys.set(key, { ...record, status: "BOUND", unitId });
+  }
+
   /** Removes the key for good; a unit presenting it later gets INVALID_KEY. */
   delete(key: string): boolean {
     return this.keys.delete(key);

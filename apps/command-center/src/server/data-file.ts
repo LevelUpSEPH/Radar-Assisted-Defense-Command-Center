@@ -1,13 +1,14 @@
 // The Command Center's persistent state (DESIGN.md §3, Persistence): a JSON file
-// that survives restarts. Only keys for now; registered units come later.
+// that survives restarts: keys and registered units.
 
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
-import { KeyRecordSchema } from "../protocol";
+import { KeyRecordSchema, UnitRecordSchema } from "../protocol";
 
 const DataFileSchema = z.object({
   keys: z.array(KeyRecordSchema).default([]),
+  units: z.array(UnitRecordSchema).default([]),
 });
 export type DataFile = z.infer<typeof DataFileSchema>;
 
@@ -17,7 +18,7 @@ export async function loadDataFile(path: string): Promise<DataFile> {
   try {
     text = await readFile(path, "utf8");
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { keys: [] };
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { keys: [], units: [] };
     throw new Error(`cannot read ${path}`, { cause: err });
   }
   let json: unknown;

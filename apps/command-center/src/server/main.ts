@@ -7,7 +7,9 @@ import type { CommandState, UiToServer } from "../protocol";
 import { loadConfig } from "./config";
 import { loadDataFile, saveDataFile } from "./data-file";
 import { KeyStore } from "./keys";
+import { Registry } from "./registry";
 import { startUiServer, type UiServer } from "./ui-server";
+import { startUnitServer } from "./unit-server";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
 
@@ -18,12 +20,32 @@ async function main() {
 
   const data = await loadDataFile(config.dataFile);
   const keys = new KeyStore(data.keys);
-  console.log(`[cc] ${data.keys.length} keys from ${config.dataFile}`);
-  const save = () => saveDataFile(config.dataFile, { keys: keys.list() });
+  const registry = new Registry(keys, data.units);
+  console.log(`[cc] ${data.keys.length} keys, ${data.units.length} units from ${config.dataFile}`);
 
-  const state = (): CommandState => ({ view: config.view, keys: keys.list() });
+  // Saves are queued so two quick changes can't write the file at the same time.
+  let saving = Promise.resolve();
+  const save = () => {
+    saving = saving
+      .then(() => saveDataFile(config.dataFile, { keys: keys.list(), units: registry.records() }))
+      .catch((err: unknown) => console.error(`[cc] save failed: ${String(err)}`));
+    return saving;
+  };
+
+  const state = (): CommandState => ({
+    view: config.view,
+    keys: keys.list(),
+    units: registry.view(),
+  });
 
   let ui: UiServer | null = null;
+  const units = startUnitServer(config.port, registry, {
+    onRegister: (result) => {
+      if (result.kind === "registered") void save();
+    },
+    onChange: () => ui?.publish(),
+  });
+
   const onCommand = async (msg: UiToServer) => {
     switch (msg.type) {
       case "generateKey": {
@@ -34,6 +56,9 @@ async function main() {
       }
       case "deleteKey": {
         if (!keys.delete(msg.payload.key)) throw new Error(`unknown key ${msg.payload.key}`);
+        // A deleted key takes its unit with it; a connected unit is told and dropped.
+        const connId = registry.forgetKey(msg.payload.key);
+        if (connId) units.disconnect(connId, "revoked");
         await save();
         console.log(`[keys] deleted ${msg.payload.key}`);
         break;
@@ -44,7 +69,7 @@ async function main() {
   ui = await startUiServer(config.uiPort, state, onCommand);
 
   const shutdown = async () => {
-    await ui?.close();
+    await Promise.all([units.close(), ui?.close()]);
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

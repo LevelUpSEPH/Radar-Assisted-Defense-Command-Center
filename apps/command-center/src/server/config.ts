@@ -4,6 +4,8 @@ import { DEFAULT_MAP_VIEW, DEFAULT_PORTS, MapViewSchema } from "@tdts/shared";
 import { z } from "zod";
 
 const ConfigFileSchema = z.object({
+  /** Radars and weapons connect here. */
+  port: z.number().int().positive().default(DEFAULT_PORTS.commandCenter),
   uiPort: z.number().int().positive().default(DEFAULT_PORTS.commandCenterUi),
   view: MapViewSchema.default(DEFAULT_MAP_VIEW),
   /** Keys and registered units; relative to the config file. */
