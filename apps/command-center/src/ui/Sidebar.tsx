@@ -1,10 +1,58 @@
+import { useState } from "react";
 import { KeysPanel } from "./KeysPanel";
 import { TracksPanel } from "./TracksPanel";
 import { UnitsPanel } from "./UnitsPanel";
 import type { CommandSocket } from "./useCommandSocket";
 
+type Tab = "tracks" | "units" | "keys";
+const TABS: readonly Tab[] = ["tracks", "units", "keys"];
+const TAB_LABEL: Record<Tab, string> = { tracks: "Tracks", units: "Units", keys: "Keys" };
+const TAB_STORAGE = "tdts.cc.sidebarTab";
+
+/** The tab this browser last had open (a per-viewer convenience; may be unavailable). */
+function rememberedTab(): Tab {
+  try {
+    const saved = localStorage.getItem(TAB_STORAGE);
+    return TABS.includes(saved as Tab) ? (saved as Tab) : "tracks";
+  } catch {
+    return "tracks";
+  }
+}
+
 export function Sidebar({ cc }: { cc: CommandSocket }) {
   const { connected, state, error, clearError, send } = cc;
+  const [tab, setTab] = useState<Tab>(rememberedTab);
+  const choose = (next: Tab) => {
+    setTab(next);
+    try {
+      localStorage.setItem(TAB_STORAGE, next);
+    } catch {
+      // Storage can be blocked; the tab just won't be remembered.
+    }
+  };
+
+  const tracks = state?.tracks ?? [];
+  const units = state?.units ?? [];
+  const keys = state?.keys ?? [];
+
+  // What each tab has that needs attention.
+  const badges: Record<Tab, { count: number; tone: string; title: string }> = {
+    tracks: {
+      count: tracks.filter((t) => t.engageable).length,
+      tone: "badge-enemy",
+      title: "engageable enemies",
+    },
+    units: {
+      count: units.filter((u) => u.status === "PENDING").length,
+      tone: "badge-warn",
+      title: "units waiting for approval",
+    },
+    keys: {
+      count: keys.filter((k) => k.status === "ISSUED").length,
+      tone: "badge-muted",
+      title: "keys not used yet",
+    },
+  };
 
   return (
     <aside className="sidebar">
@@ -18,6 +66,31 @@ export function Sidebar({ cc }: { cc: CommandSocket }) {
         </span>
       </header>
 
+      <nav className="tabs" role="tablist" aria-label="Sidebar">
+        {TABS.map((t) => {
+          const badge = badges[t];
+          return (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              id={`tab-${t}`}
+              aria-selected={tab === t}
+              aria-controls={`panel-${t}`}
+              className={tab === t ? "on" : ""}
+              onClick={() => choose(t)}
+            >
+              {TAB_LABEL[t]}
+              {badge.count > 0 && (
+                <span className={`tab-badge ${badge.tone}`} title={`${badge.count} ${badge.title}`}>
+                  {badge.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
       {error && (
         <div className="error" role="alert">
           <span>{error}</span>
@@ -27,16 +100,18 @@ export function Sidebar({ cc }: { cc: CommandSocket }) {
         </div>
       )}
 
-      <TracksPanel
-        tracks={state?.tracks ?? []}
-        minLikelihoodToEngage={state?.minLikelihoodToEngage ?? 0.6}
-        disabled={!connected}
-        send={send}
-      />
-
-      <UnitsPanel units={state?.units ?? []} disabled={!connected} send={send} />
-
-      <KeysPanel keys={state?.keys ?? []} disabled={!connected} send={send} />
+      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        {tab === "tracks" && (
+          <TracksPanel
+            tracks={tracks}
+            minLikelihoodToEngage={state?.minLikelihoodToEngage ?? 0.6}
+            disabled={!connected}
+            send={send}
+          />
+        )}
+        {tab === "units" && <UnitsPanel units={units} disabled={!connected} send={send} />}
+        {tab === "keys" && <KeysPanel keys={keys} disabled={!connected} send={send} />}
+      </div>
     </aside>
   );
 }

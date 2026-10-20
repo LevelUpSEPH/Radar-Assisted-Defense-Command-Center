@@ -1,0 +1,15 @@
+{
+  "name": "Battery Alpha",
+  "position": {
+    "lat": 47.42,
+    "lon": 8.62
+  },
+  "minRangeM": 2000,
+  "maxRangeM": 15000,
+  "ammo": 20,
+  "prepareTimeS": 8,
+  "reloadTimeS": 12,
+  "shellSpeedMps": 300,
+  "commandCenterUrl": "ws://localhost:7100",
+  "uiPort": 7301
+}

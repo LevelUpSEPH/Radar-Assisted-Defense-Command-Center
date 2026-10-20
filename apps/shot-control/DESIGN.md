@@ -1,6 +1,6 @@
 # Shot Control — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **planned** (milestones 5 and 6).
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 5 in progress**: piece 1 (registers with its device key and a key entered on its page, heartbeats, reconnects, status page with range rings) done. Next: the weapon state machine and status reports.
 
 A Shot Control is one mortar-like weapon. When the Command Center tells it to prepare, it gets ready (busy), reports ready, and on `fire` computes its own firing solution and fires where the target will be. A computed shot always hits (ideal test scene), so shells are not simulated anywhere. Then it reloads (busy) and is available again. Many Shot Controls run at once, one process each.
 
@@ -36,7 +36,9 @@ Not its job: choosing targets, or deciding whether a shot killed.
 }
 ```
 
-Start: `npm run dev -w @tdts/shot-control -- --config scenario/weapons/alpha.json`.
+Start: `npm run dev -w @tdts/shot-control -- --config scenario/weapons/alpha.json [--key TDTS-…]` (page on the config's `uiPort`, 7301 for Battery Alpha).
+
+Like the Radar Center, the weapon keeps its device identity and the registration key entered on its page in git-ignored files (`identityFile`, `registrationFile`, under `apps/shot-control/data/`). The identity, key store, Command Center link and page server are the Radar Center's, copied; moving them into a shared package is a later clean-up.
 
 The registration key is entered on the weapon's page and remembered, exactly like the Radar Center (no key in the config). Start-up, reconnect and revocation behave like the Radar Center's: load the device identity, register, answer the challenge, then heartbeats. A weapon **never connects to the World Simulator**: it shoots where it is told.
 

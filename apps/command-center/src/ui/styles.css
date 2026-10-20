@@ -504,3 +504,62 @@ code.fingerprint {
   background: color-mix(in srgb, #facc15 20%, transparent);
   border-color: #facc15;
 }
+
+/* ---------------------------------------------------------------- sidebar tabs */
+
+.tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border-bottom: 1px solid var(--border);
+  margin: -6px -16px 0;
+  padding: 0 16px;
+}
+
+.tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  padding: 8px 4px;
+}
+
+.tabs button:hover:not(:disabled) {
+  background: none;
+  color: var(--text);
+}
+
+.tabs button.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tab-badge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge-enemy {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.badge-warn {
+  background: #713f12;
+  color: #fde68a;
+}
+
+.badge-muted {
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}

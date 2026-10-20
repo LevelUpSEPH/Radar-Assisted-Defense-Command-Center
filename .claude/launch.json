@@ -34,6 +34,17 @@
         "scenario/radars/east.json"
       ],
       "port": 7202
+    },
+    {
+      "name": "weapon-alpha",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "node_modules/tsx/dist/cli.mjs",
+        "apps/shot-control/src/server/main.ts",
+        "--config",
+        "scenario/weapons/alpha.json"
+      ],
+      "port": 7301
     }
   ]
 }
