@@ -499,3 +499,27 @@ code.fingerprint {
   height: 100%;
   transition: width 0.3s;
 }
+
+/* ---------------------------------------------------------------- key entry */
+
+.link-card {
+  align-items: flex-start;
+}
+
+.key-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.key-entry input {
+  font-family: ui-monospace, Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.key-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

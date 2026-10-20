@@ -2,6 +2,7 @@
 // this program; messages are { type, payload }.
 
 import type { LatLon, RejectReason } from "@tdts/shared";
+import { z } from "zod";
 
 /** Where this radar stands with the Command Center. */
 export type LinkStatus =
@@ -42,7 +43,16 @@ export interface RadarState {
   /** Fingerprint of this radar's device key. */
   deviceId: string;
   commandCenterUrl: string;
+  /** The registration key in use, or null until one is entered. */
+  registrationKey: string | null;
   link: LinkStatus;
 }
 
-export type ServerToUi = { type: "state"; payload: RadarState };
+export type ServerToUi =
+  { type: "state"; payload: RadarState } | { type: "error"; payload: { detail: string } };
+
+export const UiToServerSchema = z.discriminatedUnion("type", [
+  /** The operator entered a registration key from the Command Center. */
+  z.object({ type: z.literal("setKey"), payload: z.object({ key: z.string() }) }),
+]);
+export type UiToServer = z.infer<typeof UiToServerSchema>;

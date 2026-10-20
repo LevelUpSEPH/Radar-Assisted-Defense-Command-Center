@@ -23,7 +23,6 @@ Not its job: deciding a track's classification (the Command Center does), or fus
 
 ```json
 {
-  "key": "TDTS-....",
   "name": "Radar North",
   "position": { "lat": 0.0, "lon": 0.0 },
   "rangeM": 60000,
@@ -37,13 +36,15 @@ Not its job: deciding a track's classification (the Command Center does), or fus
 
 Start: `npm run dev -w @tdts/radar-center -- --config scenario/radars/north.json [--key TDTS-…]`.
 
-The registration key can be in the config (`"key"`) or passed with `--key`; without one, the page says how to get one. The device identity (key pair) lives in `identityFile`, by default `apps/radar-center/data/identities/<config name>`, which is git-ignored because it holds the private key.
+**Registration key:** not in the config. The operator copies a radar key from the Command Center and enters it on the radar's page (**Register**). The radar remembers it in `registrationFile` (default `apps/radar-center/data/registrations/<config name>`) and uses it on every start. The page asks for a key whenever there is none or the current one stopped working (rejected or revoked), and offers **Change key** otherwise; a new key takes effect immediately, without a restart. `--key` does the same from the command line, for scripted launches.
+
+**Device identity:** the key pair lives in `identityFile`, by default `apps/radar-center/data/identities/<config name>`. Both files are git-ignored; the identity holds the private key.
 
 ---
 
 ## 3. Start-up
 
-1. Load its device key pair from its identity file (created on first start; the private key never leaves the device). Connect to the Command Center and send `register` with its public key (`rangeM` as capability). Answer the `challenge` by signing the nonce. Wait for `registered`. On `pending`, keep connected and show "waiting for operator approval". On `rejected`, show the reason and stop.
+1. Load its device key pair from its identity file (created on first start; the private key never leaves the device). Connect to the Command Center and send `register` with its public key (`rangeM` as capability). Answer the `challenge` by signing the nonce. Wait for `registered`. On `pending`, keep connected and show "waiting for operator approval". On `rejected`, show the reason and stop (and ask for a key).
 2. Connect to the World Simulator and send `hello { radarId: unitId, position, rangeM }`.
 3. Start the scan loop and the heartbeat (`HEARTBEAT_INTERVAL_MS`).
 4. If either connection drops, retry every 2 s; scanning pauses until both are up.

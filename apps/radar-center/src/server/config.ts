@@ -4,8 +4,6 @@ import { DEFAULT_PORTS, LatLonSchema } from "@tdts/shared";
 import { z } from "zod";
 
 const ConfigFileSchema = z.object({
-  /** Registration key from the Command Center. Can also be given with --key. */
-  key: z.string().optional(),
   name: z.string().min(1),
   position: LatLonSchema,
   rangeM: z.number().positive(),
@@ -19,11 +17,14 @@ const ConfigFileSchema = z.object({
    * to the config file. Defaults to a git-ignored folder, one file per config.
    */
   identityFile: z.string().optional(),
+  /** Where the registration key entered on the radar's page is remembered. */
+  registrationFile: z.string().optional(),
 });
 
-export type Config = Omit<z.infer<typeof ConfigFileSchema>, "identityFile"> & {
-  /** Absolute path. */
+export type Config = Omit<z.infer<typeof ConfigFileSchema>, "identityFile" | "registrationFile"> & {
+  /** Absolute paths. */
   identityFile: string;
+  registrationFile: string;
 };
 
 const APP_DATA = resolve(import.meta.dirname, "../../data");
@@ -38,11 +39,13 @@ export async function loadConfig(path: string): Promise<Config> {
   }
   const parsed = ConfigFileSchema.safeParse(json);
   if (!parsed.success) throw new Error(`${path}: ${z.prettifyError(parsed.error)}`);
-  const { identityFile, ...rest } = parsed.data;
+  const { identityFile, registrationFile, ...rest } = parsed.data;
+  const inData = (folder: string) => resolve(APP_DATA, folder, basename(path));
   return {
     ...rest,
-    identityFile: identityFile
-      ? resolve(dirname(path), identityFile)
-      : resolve(APP_DATA, "identities", basename(path)),
+    identityFile: identityFile ? resolve(dirname(path), identityFile) : inData("identities"),
+    registrationFile: registrationFile
+      ? resolve(dirname(path), registrationFile)
+      : inData("registrations"),
   };
 }

@@ -1,11 +1,11 @@
 // The radar's operator page (served by Vite in middleware mode) and its
-// WebSocket at /ws. For now the page only watches; commands come later.
+// WebSocket at /ws.
 
 import { createServer as createHttpServer } from "node:http";
 import { resolve } from "node:path";
 import { createServer as createViteServer } from "vite";
-import { WebSocketServer } from "ws";
-import type { RadarState, ServerToUi } from "../protocol";
+import { WebSocketServer, type WebSocket } from "ws";
+import { UiToServerSchema, type RadarState, type ServerToUi, type UiToServer } from "../protocol";
 
 const APP_ROOT = resolve(import.meta.dirname, "../..");
 
@@ -15,10 +15,17 @@ export interface UiServer {
   close(): Promise<void>;
 }
 
+/**
+ * Handles one operator command. Throwing an Error sends its message back to
+ * that page only, as an `error`.
+ */
+export type UiCommandHandler = (msg: UiToServer) => Promise<void>;
+
 /** `currentState` is read on every publish and for every page that connects. */
 export async function startUiServer(
   port: number,
   currentState: () => RadarState,
+  onCommand: UiCommandHandler,
 ): Promise<UiServer> {
   const http = createHttpServer();
   const vite = await createViteServer({
@@ -36,9 +43,31 @@ export async function startUiServer(
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
   });
 
+  const send = (ws: WebSocket, msg: ServerToUi) => ws.send(JSON.stringify(msg));
+  const sendError = (ws: WebSocket, detail: string) =>
+    send(ws, { type: "error", payload: { detail } });
   const stateMessage = () =>
     JSON.stringify({ type: "state", payload: currentState() } satisfies ServerToUi);
-  wss.on("connection", (ws) => ws.send(stateMessage()));
+
+  wss.on("connection", (ws) => {
+    ws.send(stateMessage());
+
+    ws.on("message", async (data) => {
+      let json: unknown;
+      try {
+        json = JSON.parse(data.toString());
+      } catch {
+        return sendError(ws, "invalid JSON");
+      }
+      const parsed = UiToServerSchema.safeParse(json);
+      if (!parsed.success) return sendError(ws, "bad message");
+      try {
+        await onCommand(parsed.data);
+      } catch (err) {
+        sendError(ws, err instanceof Error ? err.message : String(err));
+      }
+    });
+  });
 
   await new Promise<void>((done) => http.listen(port, done));
   console.log(`[ui] radar page on http://localhost:${port}`);

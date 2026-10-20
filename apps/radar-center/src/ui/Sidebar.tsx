@@ -1,9 +1,10 @@
-import type { LinkStatus } from "../protocol";
+import { useState, type FormEvent } from "react";
+import type { LinkStatus, UiToServer } from "../protocol";
 import { TracksPanel } from "./TracksPanel";
 import type { RadarSocket } from "./useRadarSocket";
 
 export function Sidebar({ radar }: { radar: RadarSocket }) {
-  const { connected, state } = radar;
+  const { connected, state, error, clearError, send } = radar;
 
   return (
     <aside className="sidebar">
@@ -17,13 +18,31 @@ export function Sidebar({ radar }: { radar: RadarSocket }) {
         </span>
       </header>
 
+      {error && (
+        <div className="error" role="alert">
+          <span>{error}</span>
+          <button className="link" onClick={clearError} aria-label="Dismiss error">
+            ✕
+          </button>
+        </div>
+      )}
+
       {state && (
         <>
           <section>
             <h2>Links</h2>
             <ul className="list">
               <li>
-                <LinkCard link={state.link} url={state.commandCenterUrl} />
+                <LinkCard
+                  link={state.link}
+                  url={state.commandCenterUrl}
+                  registrationKey={state.registrationKey}
+                  disabled={!connected}
+                  send={(msg) => {
+                    clearError();
+                    send(msg);
+                  }}
+                />
               </li>
               <li className="row">
                 <div className="row-main">
@@ -76,10 +95,28 @@ const LINK_TEXT: Record<LinkStatus["state"], { pill: string; label: string }> = 
   revoked: { pill: "pill-bad", label: "Revoked" },
 };
 
-function LinkCard({ link, url }: { link: LinkStatus; url: string }) {
+/** States where the radar can't get in with its current key: ask for one right away. */
+const NEEDS_KEY: readonly LinkStatus["state"][] = ["no-key", "rejected", "revoked"];
+
+function LinkCard({
+  link,
+  url,
+  registrationKey,
+  disabled,
+  send,
+}: {
+  link: LinkStatus;
+  url: string;
+  registrationKey: string | null;
+  disabled: boolean;
+  send(msg: UiToServer): void;
+}) {
   const { pill, label } = LINK_TEXT[link.state];
+  const [changing, setChanging] = useState(false);
+  const askForKey = NEEDS_KEY.includes(link.state) || changing;
+
   return (
-    <div className="row">
+    <div className="row link-card">
       <div className="row-main">
         <span title={url}>
           Command Center
@@ -91,16 +128,79 @@ function LinkCard({ link, url }: { link: LinkStatus; url: string }) {
           )}
         </span>
         <span className="muted small">{explain(link)}</span>
+
+        {askForKey ? (
+          <KeyForm
+            disabled={disabled}
+            onSubmit={(key) => {
+              send({ type: "setKey", payload: { key } });
+              setChanging(false);
+            }}
+            onCancel={changing ? () => setChanging(false) : undefined}
+          />
+        ) : (
+          registrationKey && (
+            <span className="muted small">
+              Key <code className="key">{registrationKey}</code> ·{" "}
+              <button type="button" className="link" onClick={() => setChanging(true)}>
+                Change key
+              </button>
+            </span>
+          )
+        )}
       </div>
       <span className={`pill ${pill}`}>{label}</span>
     </div>
   );
 }
 
+function KeyForm({
+  disabled,
+  onSubmit,
+  onCancel,
+}: {
+  disabled: boolean;
+  onSubmit(key: string): void;
+  onCancel?: () => void;
+}) {
+  const [key, setKey] = useState("");
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!key.trim()) return;
+    onSubmit(key);
+    setKey("");
+  };
+
+  return (
+    <form className="key-entry" onSubmit={submit}>
+      <label className="field">
+        <span>Registration key</span>
+        <input
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          placeholder="TDTS-XXXX-XXXX-XXXX"
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
+      <div className="key-entry-actions">
+        <button type="submit" disabled={disabled || !key.trim()}>
+          Register
+        </button>
+        {onCancel && (
+          <button type="button" className="link" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 function explain(link: LinkStatus): string {
   switch (link.state) {
     case "no-key":
-      return 'Generate a radar key in the Command Center and put it in this radar\'s config ("key"), or start it with --key.';
+      return "Generate a radar key in the Command Center, then enter it here.";
     case "connecting":
       return "Trying to reach the Command Center; retrying every 2 s.";
     case "verifying":
@@ -112,7 +212,7 @@ function explain(link: LinkStatus): string {
     case "rejected":
       return REJECT_TEXT[link.reason] + (link.detail ? ` (${link.detail})` : "");
     case "revoked":
-      return "The operator deleted this radar's key. It needs a new key to rejoin.";
+      return "The operator deleted this radar's key. Enter a new one to rejoin.";
   }
 }
 

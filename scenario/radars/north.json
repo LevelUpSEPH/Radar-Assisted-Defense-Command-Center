@@ -1,7 +1,9 @@
 {
-  "key": "",
   "name": "Radar North",
-  "position": { "lat": 47.5, "lon": 8.5 },
+  "position": {
+    "lat": 47.5,
+    "lon": 8.5
+  },
   "rangeM": 40000,
   "scanIntervalMs": 1000,
   "positionNoiseM": 50,

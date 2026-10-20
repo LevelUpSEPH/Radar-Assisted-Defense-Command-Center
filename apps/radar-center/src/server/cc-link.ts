@@ -30,12 +30,17 @@ export interface CommandCenterLink {
   /** The registered unit id, or null until registered. */
   unitId(): string | null;
   send(msg: ToCommandCenter): void;
+  /**
+   * Starts over with a new registration (a new key from the operator), or
+   * goes idle with null. Any current connection is dropped first.
+   */
+  useRegistration(register: RegisterPayload | null): void;
   close(): void;
 }
 
 export interface LinkOptions {
   url: string;
-  /** Null when no registration key is configured: the link stays idle. */
+  /** Null when there is no registration key yet: the link stays idle. */
   register: RegisterPayload | null;
   device: DeviceKeys;
   onStatus(status: LinkStatus): void;
@@ -49,6 +54,8 @@ export function connectToCommandCenter(opts: LinkOptions): CommandCenterLink {
   let heartbeat: NodeJS.Timeout | undefined;
   let retry: NodeJS.Timeout | undefined;
   let stopped = false;
+  /** Bumped on every (re)start, so events from a replaced connection are ignored. */
+  let generation = 0;
 
   const setStatus = (next: LinkStatus) => {
     status = next;
@@ -58,10 +65,13 @@ export function connectToCommandCenter(opts: LinkOptions): CommandCenterLink {
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   };
 
-  const connect = (register: RegisterPayload) => {
-    ws = new WebSocket(opts.url);
+  const connect = (register: RegisterPayload, gen: number) => {
+    const socket = new WebSocket(opts.url);
+    ws = socket;
+    const current = () => gen === generation;
 
-    ws.on("open", () => {
+    socket.on("open", () => {
+      if (!current()) return;
       console.log(`[cc] connected to ${opts.url}, registering`);
       send(createMessage<ToCommandCenter, "register">("register", register));
       heartbeat = setInterval(
@@ -70,7 +80,8 @@ export function connectToCommandCenter(opts: LinkOptions): CommandCenterLink {
       );
     });
 
-    ws.on("message", async (data) => {
+    socket.on("message", async (data) => {
+      if (!current()) return;
       const parsed = parseMessage(FromCommandCenterSchema, data.toString());
       if (!parsed.ok) return console.warn(`[cc] unexpected message: ${data.toString()}`);
       const msg = parsed.message;
@@ -82,6 +93,7 @@ export function connectToCommandCenter(opts: LinkOptions): CommandCenterLink {
             msg.payload.nonce,
             register.key,
           );
+          if (!current()) return;
           send(
             createMessage<ToCommandCenter, "challengeResponse">("challengeResponse", { signature }),
           );
@@ -111,7 +123,8 @@ export function connectToCommandCenter(opts: LinkOptions): CommandCenterLink {
       }
     });
 
-    ws.on("close", () => {
+    socket.on("close", () => {
+      if (!current()) return;
       clearInterval(heartbeat);
       const final =
         status.state === "revoked" ||
@@ -119,21 +132,34 @@ export function connectToCommandCenter(opts: LinkOptions): CommandCenterLink {
       if (stopped || final) return;
       if (status.state !== "connecting") console.log("[cc] connection lost, retrying");
       setStatus({ state: "connecting" });
-      retry = setTimeout(() => connect(register), RECONNECT_MS);
+      retry = setTimeout(() => connect(register, gen), RECONNECT_MS);
     });
 
     // A refused connection also emits "close", which schedules the retry.
-    ws.on("error", () => {});
+    socket.on("error", () => {});
   };
 
-  if (opts.register) connect(opts.register);
+  const start = (register: RegisterPayload | null) => {
+    const gen = ++generation;
+    clearTimeout(retry);
+    clearInterval(heartbeat);
+    ws?.close();
+    ws = null;
+    if (!register) return setStatus({ state: "no-key" });
+    setStatus({ state: "connecting" });
+    connect(register, gen);
+  };
+
+  if (opts.register) connect(opts.register, generation);
 
   return {
     status: () => status,
     unitId: () => (status.state === "registered" ? status.unitId : null),
     send,
+    useRegistration: start,
     close: () => {
       stopped = true;
+      generation++;
       clearTimeout(retry);
       clearInterval(heartbeat);
       ws?.close();
