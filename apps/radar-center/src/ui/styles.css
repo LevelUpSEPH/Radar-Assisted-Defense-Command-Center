@@ -523,3 +523,50 @@ code.fingerprint {
   align-items: center;
   gap: 12px;
 }
+
+/* ---------------------------------------------------------------- IFF */
+
+:root {
+  --friendly: #60a5fa;
+  --enemy: #f87171;
+}
+
+.iff {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.iff-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.iff-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.iff-actions button.small {
+  padding: 2px 10px;
+  font-size: 12px;
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+.iff-actions button.on-friendly {
+  background: color-mix(in srgb, var(--friendly) 25%, transparent);
+  border-color: var(--friendly);
+}
+
+.iff-actions button.on-enemy {
+  background: color-mix(in srgb, var(--enemy) 25%, transparent);
+  border-color: var(--enemy);
+}

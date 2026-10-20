@@ -112,6 +112,17 @@ describe("Tracker", () => {
     expect(t.view().map((v) => v.answersIff)).toEqual([true, false]);
   });
 
+  it("keeps an operator marking until it's cleared or the track goes", () => {
+    const t = new Tracker({ positionNoiseM: 0 });
+    fly(t, 100, 0, 2);
+    expect(t.mark("T-0001", "ENEMY")).toBe(true);
+    fly(t, 100, 0, 1);
+    expect(t.view()[0]!.marking).toBe("ENEMY");
+    t.mark("T-0001", null);
+    expect(t.view()[0]!.marking).toBeNull();
+    expect(t.mark("T-9999", "FRIENDLY")).toBe(false);
+  });
+
   it("gives a reappearing object a new track id", () => {
     const t = new Tracker({ positionNoiseM: 0 });
     fly(t, 100, 0, 2);

@@ -104,7 +104,7 @@ Every registered radar sends `tracks` after each sweep. The Command Center keeps
 - A newer sweep replaces the radar's previous one entirely; an older sweep is ignored.
 - A radar's tracks disappear when it disconnects, times out or its key is deleted, and when it hasn't reported for 5 s.
 - Only registered radars may report; anything else gets `error { NOT_REGISTERED }` or `error { WRONG_UNIT_TYPE }`.
-- The operator page shows them on the map exactly as the radar draws them (colored by drone likelihood, a trail of the last 10 reported positions, heading line 60 s ahead) and in an **Air picture** list (most likely drones first; tracks that answered IFF are marked). The radar doesn't send its trails; the Command Center builds each trail from successive reports.
+- The operator page shows them on the map exactly as the radar draws them (colored by friend/enemy status: friend blue, enemy red, unknown yellow; a trail of the last 10 reported positions; heading line 60 s ahead) and in an **Air picture** list (most likely drones first; "Reported friend" / "Reported enemy" when a radar says so). Drone likelihood is shown as a number and word in neutral colors. The radar doesn't send its trails; the Command Center builds each trail from successive reports.
 - The map starts on the configured view and, the first time units are known, frames their coverage (once; after that the operator pans freely).
 
 ### Track fusion (planned)

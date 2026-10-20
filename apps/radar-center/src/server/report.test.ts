@@ -11,6 +11,7 @@ const view: TrackView = {
   headingDeg: 194.2,
   likelihood: 0.93,
   answersIff: false,
+  marking: null,
   trail: [{ lat: 47.51, lon: 8.5 }],
   observedAt: 1_700_000_000_000,
   missedScans: 1,
@@ -29,6 +30,12 @@ describe("track reports", () => {
       observedAt: 1_700_000_000_000,
     });
     expect(reportedTrack({ ...view, answersIff: true }).iff).toBe("FRIENDLY");
+  });
+
+  it("let the operator's marking win over the IFF reply", () => {
+    expect(reportedTrack({ ...view, answersIff: true, marking: "ENEMY" }).iff).toBe("ENEMY");
+    expect(reportedTrack({ ...view, marking: "FRIENDLY" }).iff).toBe("FRIENDLY");
+    expect(reportedTrack({ ...view, answersIff: true, marking: "UNKNOWN" }).iff).toBe("UNKNOWN");
   });
 
   it("build a tracks message the Command Center accepts", () => {

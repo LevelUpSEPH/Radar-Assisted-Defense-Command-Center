@@ -12,7 +12,7 @@ import { connectToCommandCenter, type RegisterPayload } from "./cc-link";
 import { loadConfig } from "./config";
 import { loadOrCreateIdentity } from "./identity";
 import { loadRegistrationKey, normalizeKey, saveRegistrationKey } from "./registration-store";
-import { tracksMessage } from "./report";
+import { iffReport, tracksMessage } from "./report";
 import { Tracker } from "./tracker";
 import { startUiServer, type UiServer } from "./ui-server";
 import { connectToWorld } from "./world-link";
@@ -83,7 +83,7 @@ async function main() {
     rangeM: config.rangeM,
     scanIntervalMs: config.scanIntervalMs,
     worldConnected: world.connected(),
-    tracks: tracker.view(),
+    tracks: tracker.view().map((t) => ({ ...t, iff: iffReport(t) })),
     deviceId,
     commandCenterUrl: config.commandCenterUrl,
     registrationKey: key,
@@ -101,6 +101,14 @@ async function main() {
         await saveRegistrationKey(config.registrationFile, key);
         console.log(`[radar] new registration key ${key}`);
         link.useRegistration(registration(key));
+        break;
+      }
+      case "markTrack": {
+        const { radarTrackId, marking } = msg.payload;
+        if (!tracker.mark(radarTrackId, marking)) {
+          throw new Error(`${radarTrackId} is no longer tracked`);
+        }
+        console.log(`[radar] operator marked ${radarTrackId} ${marking ?? "(cleared)"}`);
         break;
       }
     }

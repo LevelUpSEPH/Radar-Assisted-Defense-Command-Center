@@ -11,7 +11,7 @@ import {
   useMap,
 } from "react-leaflet";
 import type { RadarState, RadarTrack } from "../protocol";
-import { LIKELIHOOD_BANDS, likelihoodBand } from "./likelihood";
+import { IFF_ORDER, IFF_STYLE } from "./track-style";
 
 const RADAR_COLOR = "#22c55e";
 /** How far ahead the dashed trajectory line reaches. */
@@ -58,7 +58,7 @@ export function MapView({ state }: { state: RadarState | null }) {
 }
 
 function TrackMarker({ track: t }: { track: RadarTrack }) {
-  const { color } = likelihoodBand(t.likelihood);
+  const { color, label } = IFF_STYLE[t.iff];
   const opacity = t.missedScans > 0 ? 0.4 : 1;
   const moving = t.trail.length >= 2 && t.speedMps > 0;
   const ahead = moving ? extrapolate(t.position, t.speedMps, t.headingDeg, PROJECT_S) : null;
@@ -92,7 +92,7 @@ function TrackMarker({ track: t }: { track: RadarTrack }) {
           {t.altitudeM.toFixed(0)} m ·{" "}
           {moving ? `${t.speedMps.toFixed(0)} m/s · ${t.headingDeg.toFixed(0)}°` : "measuring…"}
           <br />
-          drone likelihood {Math.round(t.likelihood * 100)}%
+          {label} · drone likelihood {Math.round(t.likelihood * 100)}%
         </Tooltip>
       </CircleMarker>
     </>
@@ -115,10 +115,10 @@ function Legend() {
   return (
     <div className="legend leaflet-bottom leaflet-left">
       <div className="leaflet-control">
-        {LIKELIHOOD_BANDS.map((b) => (
-          <div key={b.label} className="legend-item">
-            <span className="swatch" style={{ background: b.color }} />
-            {b.label}
+        {IFF_ORDER.map((iff) => (
+          <div key={iff} className="legend-item">
+            <span className="swatch" style={{ background: IFF_STYLE[iff].color }} />
+            {IFF_STYLE[iff].label}
           </div>
         ))}
         <div className="legend-item muted">- - - next {PROJECT_S} s</div>

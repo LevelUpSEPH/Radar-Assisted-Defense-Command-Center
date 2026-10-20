@@ -1,7 +1,7 @@
 // UI channel between a Radar Center server and its operator page. Private to
 // this program; messages are { type, payload }.
 
-import type { LatLon, RejectReason } from "@tdts/shared";
+import { IffSchema, type Iff, type LatLon, type RejectReason } from "@tdts/shared";
 import { z } from "zod";
 
 /** Where this radar stands with the Command Center. */
@@ -27,6 +27,12 @@ export interface RadarTrack {
   headingDeg: number;
   /** 0..1 likelihood of being a drone (flying vehicle) rather than a bird or clutter. */
   likelihood: number;
+  /** The object answered the IFF interrogation. */
+  answersIff: boolean;
+  /** The operator's marking, or null. */
+  marking: Iff | null;
+  /** What goes to the Command Center: the marking, else the IFF reply. */
+  iff: Iff;
   /** Recently measured positions, oldest first. */
   trail: LatLon[];
   observedAt: number;
@@ -54,5 +60,10 @@ export type ServerToUi =
 export const UiToServerSchema = z.discriminatedUnion("type", [
   /** The operator entered a registration key from the Command Center. */
   z.object({ type: z.literal("setKey"), payload: z.object({ key: z.string() }) }),
+  /** The operator marks a track friendly, enemy or unknown; null clears the marking. */
+  z.object({
+    type: z.literal("markTrack"),
+    payload: z.object({ radarTrackId: z.string(), marking: IffSchema.nullable() }),
+  }),
 ]);
 export type UiToServer = z.infer<typeof UiToServerSchema>;

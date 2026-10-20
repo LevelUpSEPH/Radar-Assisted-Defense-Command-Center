@@ -1,5 +1,5 @@
 import type { AirTrack } from "../protocol";
-import { likelihoodBand } from "./likelihood";
+import { IFF_STYLE, likelihoodLabel } from "./track-style";
 
 const POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 const compass = (deg: number) => POINTS[Math.round(deg / 45) % 8];
@@ -15,11 +15,12 @@ export function AirPanel({ tracks }: { tracks: AirTrack[] }) {
       ) : (
         <ul className="list">
           {sorted.map((t) => {
-            const band = likelihoodBand(t.likelihood);
+            const iff = IFF_STYLE[t.iff];
             return (
               <li key={`${t.unitId}/${t.radarTrackId}`} className="row">
                 <div className="row-main">
                   <span>
+                    <span className="iff-dot" style={{ background: iff.color }} />
                     <strong>{t.radarTrackId}</strong>
                     <span className="muted small"> · {t.unitId}</span>
                   </span>
@@ -27,13 +28,17 @@ export function AirPanel({ tracks }: { tracks: AirTrack[] }) {
                     {t.altitudeM.toFixed(0)} m · {t.speedMps.toFixed(0)} m/s ·{" "}
                     {t.headingDeg.toFixed(0)}° {compass(t.headingDeg)}
                   </span>
-                  <span className="small" style={{ color: band.color }}>
-                    {Math.round(t.likelihood * 100)}% · {band.label}
+                  <span className="small muted">
+                    {Math.round(t.likelihood * 100)}% · {likelihoodLabel(t.likelihood)}
                   </span>
                 </div>
-                {t.iff === "FRIENDLY" && (
-                  <span className="pill pill-friendly" title="Answered the IFF interrogation">
-                    IFF friendly
+                {t.iff !== "UNKNOWN" && (
+                  <span
+                    className="pill"
+                    style={{ color: iff.color, borderColor: iff.color }}
+                    title={`${t.unitId} reports it as ${t.iff.toLowerCase()} (its IFF reply or its operator's marking)`}
+                  >
+                    Reported {iff.label.toLowerCase()}
                   </span>
                 )}
               </li>

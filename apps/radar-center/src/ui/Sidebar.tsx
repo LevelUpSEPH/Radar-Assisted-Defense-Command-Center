@@ -60,7 +60,14 @@ export function Sidebar({ radar }: { radar: RadarSocket }) {
             </ul>
           </section>
 
-          <TracksPanel tracks={state.tracks} />
+          <TracksPanel
+            tracks={state.tracks}
+            disabled={!connected}
+            send={(msg) => {
+              clearError();
+              send(msg);
+            }}
+          />
 
           <section>
             <h2>This radar</h2>

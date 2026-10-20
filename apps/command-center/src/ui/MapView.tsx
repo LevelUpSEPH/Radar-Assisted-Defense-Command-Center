@@ -11,7 +11,7 @@ import {
   useMap,
 } from "react-leaflet";
 import type { AirTrack, UnitView } from "../protocol";
-import { LIKELIHOOD_BANDS, likelihoodBand } from "./likelihood";
+import { IFF_ORDER, IFF_STYLE } from "./track-style";
 
 const RADAR_COLOR = "#22c55e";
 const WEAPON_COLOR = "#a855f7";
@@ -90,7 +90,7 @@ function UnitMarker({ unit }: { unit: UnitView }) {
 
 /** A track as a radar reports it: colored by drone likelihood, heading shown 60 s ahead. */
 function AirTrackMarker({ track: t }: { track: AirTrack }) {
-  const { color } = likelihoodBand(t.likelihood);
+  const { color, label } = IFF_STYLE[t.iff];
   const ahead =
     t.speedMps > 0 ? extrapolate(t.position, t.speedMps, t.headingDeg, PROJECT_S) : null;
   return (
@@ -120,8 +120,8 @@ function AirTrackMarker({ track: t }: { track: AirTrack }) {
           <br />
           {t.altitudeM.toFixed(0)} m · {t.speedMps.toFixed(0)} m/s · {t.headingDeg.toFixed(0)}°
           <br />
-          drone likelihood {Math.round(t.likelihood * 100)}%
-          {t.iff === "FRIENDLY" && " · IFF friendly"}
+          {t.iff === "UNKNOWN" ? label : `Reported ${label.toLowerCase()}`} · drone likelihood{" "}
+          {Math.round(t.likelihood * 100)}%
         </Tooltip>
       </CircleMarker>
     </>
@@ -171,10 +171,10 @@ function Legend() {
             {label}
           </div>
         ))}
-        {LIKELIHOOD_BANDS.map((b) => (
-          <div key={b.label} className="legend-item">
-            <span className="swatch" style={{ background: b.color }} />
-            {b.label}
+        {IFF_ORDER.map((iff) => (
+          <div key={iff} className="legend-item">
+            <span className="swatch" style={{ background: IFF_STYLE[iff].color }} />
+            {IFF_STYLE[iff].label}
           </div>
         ))}
         <div className="legend-item muted">- - - next {PROJECT_S} s</div>

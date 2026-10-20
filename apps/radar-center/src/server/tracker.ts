@@ -14,6 +14,7 @@ import {
   normalizeBearing,
   RADAR_TRACK_DROP_SCANS,
   type Detection,
+  type Iff,
   type LatLon,
 } from "@tdts/shared";
 
@@ -38,6 +39,8 @@ export interface TrackView {
   likelihood: number;
   /** The object answered the IFF (friend-or-foe) interrogation: it says it's friendly. */
   answersIff: boolean;
+  /** What the radar operator marked it as, or null if they haven't. */
+  marking: Iff | null;
   /** Recent noisy positions, oldest first: what the radar actually measured. */
   trail: LatLon[];
   /** When the newest position was measured, epoch ms. */
@@ -58,6 +61,7 @@ interface Track {
   altitudeM: number;
   likelihood: number | null;
   answersIff: boolean;
+  marking: Iff | null;
   missedScans: number;
 }
 
@@ -94,6 +98,7 @@ export class Tracker {
           altitudeM: d.altitudeM,
           likelihood: null,
           answersIff: d.iffResponds,
+          marking: null,
           missedScans: 0,
         };
         this.tracks.set(d.truthId, track);
@@ -135,11 +140,25 @@ export class Tracker {
         headingDeg: fit.headingDeg,
         likelihood: t.likelihood ?? 0,
         answersIff: t.answersIff,
+        marking: t.marking,
         trail: t.samples.map((s) => s.position),
         observedAt: last.at,
         missedScans: t.missedScans,
       };
     });
+  }
+
+  /**
+   * The operator marks a track friendly, enemy or unknown (null clears it).
+   * The marking lives as long as the track. Returns false if there's no such track.
+   */
+  mark(radarTrackId: string, marking: Iff | null): boolean {
+    for (const t of this.tracks.values()) {
+      if (t.id !== radarTrackId) continue;
+      t.marking = marking;
+      return true;
+    }
+    return false;
   }
 
   /** The world's id for one of our tracks (needed later to report a hit). */
