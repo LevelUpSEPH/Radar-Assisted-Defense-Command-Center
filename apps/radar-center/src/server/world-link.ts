@@ -1,5 +1,7 @@
 // Connection to the World Simulator (DESIGN.md §3–4): this is what the radar
-// "sees". Says hello, then scans every scanIntervalMs and hands each result to
+// "sees". To the radar and its operator it is simply the radar hardware, so
+// logs and the page call it that; nothing a radar shows hints at a simulation.
+// Says hello, then scans every scanIntervalMs and hands each result to
 // `onScan`. Reconnects on its own. Scanning doesn't depend on the Command
 // Center: a radar keeps watching the sky even while unregistered.
 
@@ -61,7 +63,7 @@ export function connectToWorld(opts: WorldLinkOptions): WorldLink {
 
     ws.on("open", () => {
       isConnected = true;
-      console.log(`[world] connected to ${opts.url}`);
+      console.log(`[sensor] radar hardware connected (${opts.url})`);
       send(
         createMessage<ToWorldSim, "hello">("hello", {
           radarId: opts.radarId,
@@ -76,7 +78,7 @@ export function connectToWorld(opts: WorldLinkOptions): WorldLink {
 
     ws.on("message", (data) => {
       const parsed = parseMessage(FromWorldSimSchema, data.toString());
-      if (!parsed.ok) return console.warn(`[world] unexpected message: ${data.toString()}`);
+      if (!parsed.ok) return console.warn(`[sensor] unexpected message: ${data.toString()}`);
       const msg = parsed.message;
       if (msg.type === "scanResult" && msg.payload.scanId === awaiting) {
         awaiting = null;
@@ -86,7 +88,7 @@ export function connectToWorld(opts: WorldLinkOptions): WorldLink {
 
     ws.on("close", () => {
       clearInterval(scanTimer);
-      if (isConnected) console.log("[world] disconnected, retrying");
+      if (isConnected) console.log("[sensor] lost the radar hardware, retrying");
       isConnected = false;
       opts.onStatus(false);
       if (!stopped) retry = setTimeout(connect, RECONNECT_MS);

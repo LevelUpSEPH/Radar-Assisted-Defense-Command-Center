@@ -86,7 +86,7 @@ If the track is unknown (already dropped), it answers `destroyed: true` without 
 ## 6. UI (port from config)
 
 - **Status bar:** registration state (registered / pending / rejected / revoked), connections, unit id.
-- **Links:** Command Center registration and World Simulator scanning.
+- **Status:** Command Center registration, and the **radar hardware** (the World Simulator connection, presented as the radar's own hardware: "Antenna sweeping every 1.0 s" or "No signal"). The radar's page and logs never mention a simulation; it should look and behave like a real radar.
 - **Map:** radar position and range circle; each track as a dot colored by drone likelihood, its measured positions as a faint trail, and a dashed line showing where it will be in 60 s.
 - **Tracks list:** only what a radar can measure: id, altitude, speed, heading (degrees and compass point) and drone likelihood (bar, percentage, band). Tracks missing from recent scans are dimmed.
 - **IFF (later piece):** buttons to mark `FRIENDLY` / `ENEMY` / `UNKNOWN` (or clear the marking).

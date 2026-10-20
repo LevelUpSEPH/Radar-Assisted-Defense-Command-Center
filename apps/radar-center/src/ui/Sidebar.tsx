@@ -30,7 +30,7 @@ export function Sidebar({ radar }: { radar: RadarSocket }) {
       {state && (
         <>
           <section>
-            <h2>Links</h2>
+            <h2>Status</h2>
             <ul className="list">
               <li>
                 <LinkCard
@@ -46,15 +46,15 @@ export function Sidebar({ radar }: { radar: RadarSocket }) {
               </li>
               <li className="row">
                 <div className="row-main">
-                  <span>World Simulator</span>
+                  <span>Radar hardware</span>
                   <span className="muted small">
                     {state.worldConnected
-                      ? `Scanning every ${(state.scanIntervalMs / 1000).toFixed(1)} s`
-                      : "Can't see anything: retrying every 2 s"}
+                      ? `Antenna sweeping every ${(state.scanIntervalMs / 1000).toFixed(1)} s`
+                      : "No signal from the radar hardware. Retrying every 2 s."}
                   </span>
                 </div>
                 <span className={`pill ${state.worldConnected ? "pill-ok" : "pill-bad"}`}>
-                  {state.worldConnected ? "Scanning" : "Offline"}
+                  {state.worldConnected ? "Scanning" : "No signal"}
                 </span>
               </li>
             </ul>
