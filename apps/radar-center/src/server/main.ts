@@ -12,6 +12,7 @@ import { connectToCommandCenter, type RegisterPayload } from "./cc-link";
 import { loadConfig } from "./config";
 import { loadOrCreateIdentity } from "./identity";
 import { loadRegistrationKey, normalizeKey, saveRegistrationKey } from "./registration-store";
+import { tracksMessage } from "./report";
 import { Tracker } from "./tracker";
 import { startUiServer, type UiServer } from "./ui-server";
 import { connectToWorld } from "./world-link";
@@ -69,6 +70,8 @@ async function main() {
     scanIntervalMs: config.scanIntervalMs,
     onScan: (detections, observedAt) => {
       tracker.update(detections, observedAt);
+      // Once registered, every sweep goes to the Command Center.
+      if (link.unitId()) link.send(tracksMessage(observedAt, tracker.view()));
       ui?.publish();
     },
     onStatus: () => ui?.publish(),

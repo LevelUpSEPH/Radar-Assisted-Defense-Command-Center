@@ -5,6 +5,7 @@ import {
   LatLonSchema,
   MapViewSchema,
   RadarCapabilitiesSchema,
+  RadarTrackSchema,
   UnitTypeSchema,
   WeaponCapabilitiesSchema,
 } from "@tdts/shared";
@@ -82,12 +83,24 @@ export const UnitViewSchema = unitBody({
 });
 export type UnitView = z.infer<typeof UnitViewSchema>;
 
+// ---------------------------------------------------------------- air picture (DESIGN.md §4)
+
+/** A track as one radar reports it, tagged with that radar's unit id. */
+export const AirTrackSchema = RadarTrackSchema.extend({
+  unitId: z.string(),
+  /** Where the radar reported it in recent sweeps, oldest first. */
+  trail: z.array(LatLonSchema),
+});
+export type AirTrack = z.infer<typeof AirTrackSchema>;
+
 // ---------------------------------------------------------------- messages
 
 export const CommandStateSchema = z.object({
   view: MapViewSchema,
   keys: z.array(KeyRecordSchema),
   units: z.array(UnitViewSchema),
+  /** What the radars report right now (not yet fused). */
+  airTracks: z.array(AirTrackSchema),
 });
 export type CommandState = z.infer<typeof CommandStateSchema>;
 

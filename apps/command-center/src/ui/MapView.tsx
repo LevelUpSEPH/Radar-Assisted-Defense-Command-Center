@@ -1,15 +1,35 @@
-import type { LatLon, MapView as MapViewConfig } from "@tdts/shared";
+import { extrapolate, type LatLon, type MapView as MapViewConfig } from "@tdts/shared";
+import { latLng, latLngBounds } from "leaflet";
 import { useEffect, useRef } from "react";
-import { Circle, CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
-import type { UnitView } from "../protocol";
+import {
+  Circle,
+  CircleMarker,
+  MapContainer,
+  Polyline,
+  TileLayer,
+  Tooltip,
+  useMap,
+} from "react-leaflet";
+import type { AirTrack, UnitView } from "../protocol";
+import { LIKELIHOOD_BANDS, likelihoodBand } from "./likelihood";
 
 const RADAR_COLOR = "#22c55e";
 const WEAPON_COLOR = "#a855f7";
 const OFFLINE_COLOR = "#64748b";
+/** How far ahead the dashed trajectory line reaches. */
+const PROJECT_S = 60;
 
 const toLatLng = (p: LatLon): [number, number] => [p.lat, p.lon];
 
-export function MapView({ view, units }: { view: MapViewConfig | null; units: UnitView[] }) {
+export function MapView({
+  view,
+  units,
+  airTracks,
+}: {
+  view: MapViewConfig | null;
+  units: UnitView[];
+  airTracks: AirTrack[];
+}) {
   // Pending units aren't part of the network yet, so they aren't drawn.
   const shown = units.filter((u) => u.status !== "PENDING");
 
@@ -20,9 +40,12 @@ export function MapView({ view, units }: { view: MapViewConfig | null; units: Un
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         className="dark-tiles"
       />
-      <ApplyView view={view} />
+      <FrameMap view={view} units={shown} />
       {shown.map((u) => (
         <UnitMarker key={u.key} unit={u} />
+      ))}
+      {airTracks.map((t) => (
+        <AirTrackMarker key={`${t.unitId}/${t.radarTrackId}`} track={t} />
       ))}
       <Legend />
     </MapContainer>
@@ -65,15 +88,71 @@ function UnitMarker({ unit }: { unit: UnitView }) {
   );
 }
 
-/** Moves the map to the configured view once, when it first arrives. */
-function ApplyView({ view }: { view: MapViewConfig | null }) {
+/** A track as a radar reports it: colored by drone likelihood, heading shown 60 s ahead. */
+function AirTrackMarker({ track: t }: { track: AirTrack }) {
+  const { color } = likelihoodBand(t.likelihood);
+  const ahead =
+    t.speedMps > 0 ? extrapolate(t.position, t.speedMps, t.headingDeg, PROJECT_S) : null;
+  return (
+    <>
+      {/* Where the radar reported it in recent sweeps. */}
+      {t.trail.map((p, i) => (
+        <CircleMarker
+          key={i}
+          center={toLatLng(p)}
+          radius={1.5}
+          pathOptions={{ color, weight: 0, fillColor: color, fillOpacity: 0.5 }}
+        />
+      ))}
+      {ahead && (
+        <Polyline
+          positions={[toLatLng(t.position), toLatLng(ahead)]}
+          pathOptions={{ color, weight: 1.5, opacity: 0.8, dashArray: "5 5" }}
+        />
+      )}
+      <CircleMarker
+        center={toLatLng(t.position)}
+        radius={6}
+        pathOptions={{ color, weight: 2, fillColor: color, fillOpacity: 0.85 }}
+      >
+        <Tooltip>
+          <strong>{t.radarTrackId}</strong> · {t.unitId}
+          <br />
+          {t.altitudeM.toFixed(0)} m · {t.speedMps.toFixed(0)} m/s · {t.headingDeg.toFixed(0)}°
+          <br />
+          drone likelihood {Math.round(t.likelihood * 100)}%
+          {t.iff === "FRIENDLY" && " · IFF friendly"}
+        </Tooltip>
+      </CircleMarker>
+    </>
+  );
+}
+
+/**
+ * Starts on the configured view, then frames the units' coverage the first
+ * time any units are known, so the operator sees where the radars look without
+ * hunting for them. Only once each: after that the operator pans freely.
+ */
+function FrameMap({ view, units }: { view: MapViewConfig | null; units: UnitView[] }) {
   const map = useMap();
-  const done = useRef(false);
+  const viewApplied = useRef(false);
+  const unitsFramed = useRef(false);
+
   useEffect(() => {
-    if (done.current || !view) return;
-    done.current = true;
-    map.setView(toLatLng(view.center), view.zoom);
-  }, [view, map]);
+    if (unitsFramed.current) return;
+    if (units.length > 0) {
+      unitsFramed.current = true;
+      const bounds = latLngBounds([]);
+      for (const u of units) {
+        const reach = u.unitType === "radar" ? u.capabilities.rangeM : u.capabilities.maxRangeM;
+        bounds.extend(latLng(u.position.lat, u.position.lon).toBounds(reach * 2));
+      }
+      map.fitBounds(bounds.pad(0.05));
+    } else if (view && !viewApplied.current) {
+      viewApplied.current = true;
+      map.setView(toLatLng(view.center), view.zoom);
+    }
+  }, [view, units, map]);
   return null;
 }
 
@@ -92,6 +171,13 @@ function Legend() {
             {label}
           </div>
         ))}
+        {LIKELIHOOD_BANDS.map((b) => (
+          <div key={b.label} className="legend-item">
+            <span className="swatch" style={{ background: b.color }} />
+            {b.label}
+          </div>
+        ))}
+        <div className="legend-item muted">- - - next {PROJECT_S} s</div>
       </div>
     </div>
   );

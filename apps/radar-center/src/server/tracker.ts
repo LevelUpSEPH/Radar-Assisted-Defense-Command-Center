@@ -36,6 +36,8 @@ export interface TrackView {
   headingDeg: number;
   /** 0..1: how likely this is a flying vehicle rather than a bird or clutter. */
   likelihood: number;
+  /** The object answered the IFF (friend-or-foe) interrogation: it says it's friendly. */
+  answersIff: boolean;
   /** Recent noisy positions, oldest first: what the radar actually measured. */
   trail: LatLon[];
   /** When the newest position was measured, epoch ms. */
@@ -55,6 +57,7 @@ interface Track {
   samples: Sample[];
   altitudeM: number;
   likelihood: number | null;
+  answersIff: boolean;
   missedScans: number;
 }
 
@@ -90,6 +93,7 @@ export class Tracker {
           samples: [],
           altitudeM: d.altitudeM,
           likelihood: null,
+          answersIff: d.iffResponds,
           missedScans: 0,
         };
         this.tracks.set(d.truthId, track);
@@ -98,6 +102,7 @@ export class Tracker {
       track.samples.push({ position: this.addNoise(d.position), at: observedAt });
       if (track.samples.length > TRACK_WINDOW) track.samples.shift();
       track.altitudeM = d.altitudeM;
+      track.answersIff = d.iffResponds;
       track.missedScans = 0;
 
       const raw = this.rawLikelihood(
@@ -129,6 +134,7 @@ export class Tracker {
         speedMps: fit.speedMps,
         headingDeg: fit.headingDeg,
         likelihood: t.likelihood ?? 0,
+        answersIff: t.answersIff,
         trail: t.samples.map((s) => s.position),
         observedAt: last.at,
         missedScans: t.missedScans,

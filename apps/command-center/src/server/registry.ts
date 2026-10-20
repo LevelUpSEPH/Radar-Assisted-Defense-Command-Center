@@ -96,6 +96,11 @@ export class Registry {
     return conn?.kind === "registered" ? conn.unitId : null;
   }
 
+  /** Whether a registered unit is a radar or a weapon. */
+  unitTypeOf(unitId: string): UnitRecord["unitType"] | null {
+    return this.units.get(unitId)?.unitType ?? null;
+  }
+
   /** The connection currently using `key`, if any. */
   connectionWithKey(key: string): string | null {
     for (const [id, c] of this.connections) if (c.kind !== "new" && c.key === key) return id;

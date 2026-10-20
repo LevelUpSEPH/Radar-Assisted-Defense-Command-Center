@@ -106,6 +106,12 @@ describe("Tracker", () => {
     expect(t.view()).toEqual([]);
   });
 
+  it("remembers whether the object answers IFF", () => {
+    const t = new Tracker({ positionNoiseM: 0 });
+    t.update([{ ...det("W1-f1", start), iffResponds: true }, det("W1-d1", start)], T0);
+    expect(t.view().map((v) => v.answersIff)).toEqual([true, false]);
+  });
+
   it("gives a reappearing object a new track id", () => {
     const t = new Tracker({ positionNoiseM: 0 });
     fly(t, 100, 0, 2);

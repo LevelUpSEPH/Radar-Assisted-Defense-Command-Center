@@ -1,6 +1,6 @@
 # Command Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) piece 3 (units register with keys, heartbeats, units list and map markers), piece 4 (approve or reject pending units) and piece 5 (device keys) done.
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) piece 3 (units register with keys, heartbeats, units list and map markers), piece 4 (approve or reject pending units) and piece 5 (device keys) done. Milestone 4 so far: radars' tracks arrive and are shown as the air picture (not yet fused).
 
 The Command Center is the brain of the network. It registers radars and weapons, builds one picture of the sky from all radar reports, decides what is an enemy, and tells weapons when to prepare and fire. It never sees ground truth and **never connects to the World Simulator**: everything it knows comes from radar and weapon reports.
 
@@ -95,7 +95,19 @@ Keys and registered units (id, type, name, position, capabilities, device public
 
 ---
 
-## 4. Track fusion
+## 4. Air picture and track fusion
+
+### Air picture (done)
+
+Every registered radar sends `tracks` after each sweep. The Command Center keeps each radar's **latest** report as it is, tagged with the radar's unit id:
+
+- A newer sweep replaces the radar's previous one entirely; an older sweep is ignored.
+- A radar's tracks disappear when it disconnects, times out or its key is deleted, and when it hasn't reported for 5 s.
+- Only registered radars may report; anything else gets `error { NOT_REGISTERED }` or `error { WRONG_UNIT_TYPE }`.
+- The operator page shows them on the map exactly as the radar draws them (colored by drone likelihood, a trail of the last 10 reported positions, heading line 60 s ahead) and in an **Air picture** list (most likely drones first; tracks that answered IFF are marked). The radar doesn't send its trails; the Command Center builds each trail from successive reports.
+- The map starts on the configured view and, the first time units are known, frames their coverage (once; after that the operator pans freely).
+
+### Track fusion (planned)
 
 Several radars may report the same object. The Command Center keeps **system tracks** (`T-0042`):
 

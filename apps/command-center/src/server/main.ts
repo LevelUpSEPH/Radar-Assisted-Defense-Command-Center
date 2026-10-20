@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 import type { CommandState, UiToServer } from "../protocol";
 import { loadConfig } from "./config";
 import { loadDataFile, saveDataFile } from "./data-file";
+import { AirPicture } from "./air-picture";
 import { KeyStore } from "./keys";
 import { Registry } from "./registry";
 import { startUiServer, type UiServer } from "./ui-server";
@@ -32,10 +33,13 @@ async function main() {
     return saving;
   };
 
+  const picture = new AirPicture();
+
   const state = (): CommandState => ({
     view: config.view,
     keys: keys.list(),
     units: registry.view(),
+    airTracks: picture.tracks(Date.now()),
   });
 
   let ui: UiServer | null = null;
@@ -43,6 +47,11 @@ async function main() {
     onRegister: (result) => {
       if (result.kind === "registered") void save();
     },
+    onTracks: (unitId, report) => {
+      picture.report(unitId, report.scanAt, report.tracks, Date.now());
+      ui?.publish();
+    },
+    onUnitGone: (unitId) => picture.forget(unitId),
     onChange: () => ui?.publish(),
   });
 
@@ -55,7 +64,9 @@ async function main() {
         break;
       }
       case "deleteKey": {
+        const unitId = keys.get(msg.payload.key)?.unitId;
         if (!keys.delete(msg.payload.key)) throw new Error(`unknown key ${msg.payload.key}`);
+        if (unitId) picture.forget(unitId);
         // A deleted key takes its unit with it; a connected unit is told and dropped.
         const connId = registry.forgetKey(msg.payload.key);
         if (connId) units.disconnect(connId, "revoked");

@@ -8,6 +8,8 @@ import {
   ToCommandCenterSchema,
   type ErrorMessage,
   type FromCommandCenter,
+  type PayloadOf,
+  type ToCommandCenter,
   type RejectReason,
 } from "@tdts/shared";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -24,6 +26,10 @@ export interface UnitServer {
 export interface UnitServerEvents {
   /** A registration attempt was answered (registered units must be saved). */
   onRegister(result: RegisterResult): void;
+  /** A registered radar reported a sweep. */
+  onTracks(unitId: string, report: PayloadOf<ToCommandCenter, "tracks">): void;
+  /** A registered unit's connection ended (disconnect, timeout, revoke). */
+  onUnitGone(unitId: string): void;
   /** Something visible to the operator changed (connect, disconnect, timeout). */
   onChange(): void;
 }
@@ -94,9 +100,18 @@ export function startUnitServer(
         case "heartbeat":
           registry.heartbeat(connId, now);
           return;
+        case "tracks": {
+          const unitId = registry.unitOn(connId);
+          if (!unitId) return sendError(ws, "NOT_REGISTERED", "register before tracks");
+          if (registry.unitTypeOf(unitId) !== "radar") {
+            return sendError(ws, "WRONG_UNIT_TYPE", "only radars report tracks");
+          }
+          events.onTracks(unitId, msg.payload);
+          return;
+        }
         default:
-          // Tracks, weapon status etc. are handled in later pieces; for now only
-          // check that the sender is a registered unit.
+          // Weapon status, kill reports etc. are handled in later pieces; for
+          // now only check that the sender is a registered unit.
           if (!registry.unitOn(connId))
             sendError(ws, "NOT_REGISTERED", `register before ${msg.type}`);
       }
@@ -104,7 +119,10 @@ export function startUnitServer(
 
     ws.on("close", () => {
       const unitId = registry.unitOn(connId);
-      if (unitId) console.log(`[units] ${unitId} disconnected`);
+      if (unitId) {
+        console.log(`[units] ${unitId} disconnected`);
+        events.onUnitGone(unitId);
+      }
       registry.disconnect(connId);
       sockets.delete(connId);
       events.onChange();

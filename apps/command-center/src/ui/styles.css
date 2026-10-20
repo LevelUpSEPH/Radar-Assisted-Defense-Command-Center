@@ -439,3 +439,8 @@ code.fingerprint {
   font-family: ui-monospace, Consolas, monospace;
   font-size: 11px;
 }
+
+.pill-friendly {
+  color: #60a5fa;
+  border-color: color-mix(in srgb, #60a5fa 40%, transparent);
+}

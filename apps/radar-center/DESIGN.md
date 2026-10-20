@@ -1,6 +1,6 @@
 # Radar Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 4 in progress**: piece 1 (registers with its device key, heartbeats, reconnects, status page) and piece 2 (scans the World Simulator; tracks with altitude, trajectory, speed and drone likelihood on its page) done. Next: reporting tracks to the Command Center.
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 4 in progress**: piece 1 (registers with its device key, heartbeats, reconnects, status page) piece 2 (scans the World Simulator; tracks with altitude, trajectory, speed and drone likelihood on its page), key entry on the page, and piece 3 (reports its tracks to the Command Center after every sweep) done. Next: IFF marking.
 
 A Radar Center is one radar site, and the **only** kind of program that connects to the World Simulator. It scans it for what is physically in range, turns raw detections into tracks with speed, heading and a likelihood of being a flying vehicle, and reports them to the Command Center. Its operator can mark tracks as friendly or enemy. Many Radar Centers run at once, one process each.
 
@@ -63,8 +63,8 @@ Start: `npm run dev -w @tdts/radar-center -- --config scenario/radars/north.json
    - `likelihood = 0.6 × signature + 0.4 × speedScore`, plus ±0.05 random noise, clamped to [0, 1].
    - Smoothed over scans (exponential moving average, newest scan weighted 0.3), so it settles as the track ages.
    - Shown in three bands: ≥ 70% likely drone, 40–70% unsure, < 40% unlikely.
-6. **IFF:** the operator's marking if there is one; otherwise `FRIENDLY` if the target answered IFF, else `UNKNOWN`.
-7. Send `tracks { scanAt, tracks: [...] }` to the Command Center, including every current track (also those not seen this scan but not yet dropped).
+6. **IFF:** the operator's marking if there is one (later piece); otherwise `FRIENDLY` if the object answered the IFF interrogation, else `UNKNOWN`. The radar's page doesn't show it; it goes to the Command Center.
+7. Once registered, send `tracks { scanAt, tracks: [...] }` to the Command Center after every sweep, including every current track (also those not seen this sweep but not yet dropped). Each reported track has only what a radar measures (id, position, altitude, speed, heading, likelihood, observedAt) plus its IFF report; the raw trail, missed-sweep count and the world's truthId stay on the radar.
 
 A track not seen for `RADAR_TRACK_DROP_SCANS` (3) scans is dropped. An object that comes back after that gets a new track id.
 
