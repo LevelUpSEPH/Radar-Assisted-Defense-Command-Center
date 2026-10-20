@@ -68,6 +68,12 @@ function UnitMarker({ unit }: { unit: UnitView }) {
   const label = (
     <Tooltip>
       <strong>{unit.unitId}</strong> · {unit.name} · {unit.status.toLowerCase()}
+      {unit.unitType === "weapon" && unit.weaponStatus && (
+        <>
+          <br />
+          {unit.weaponStatus.state.toLowerCase()} · {unit.weaponStatus.ammo} rounds
+        </>
+      )}
     </Tooltip>
   );
 

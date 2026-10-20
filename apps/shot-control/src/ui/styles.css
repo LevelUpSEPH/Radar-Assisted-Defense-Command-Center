@@ -570,3 +570,36 @@ code.fingerprint {
   background: color-mix(in srgb, var(--enemy) 25%, transparent);
   border-color: var(--enemy);
 }
+
+/* ---------------------------------------------------------------- weapon state */
+
+.weapon-card .facts {
+  margin-top: 8px;
+}
+
+.weapon-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.phase .bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.phase .fill {
+  height: 100%;
+  background: #a855f7;
+  transition: width 0.2s linear;
+}

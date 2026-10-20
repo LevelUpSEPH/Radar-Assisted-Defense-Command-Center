@@ -28,6 +28,8 @@ export interface UnitServerEvents {
   onRegister(result: RegisterResult): void;
   /** A registered radar reported a sweep. */
   onTracks(unitId: string, report: PayloadOf<ToCommandCenter, "tracks">): void;
+  /** A registered weapon reported its status. */
+  onWeaponStatus(unitId: string, status: PayloadOf<ToCommandCenter, "status">): void;
   /** A registered unit's connection ended (disconnect, timeout, revoke). */
   onUnitGone(unitId: string): void;
   /** Something visible to the operator changed (connect, disconnect, timeout). */
@@ -109,9 +111,21 @@ export function startUnitServer(
           events.onTracks(unitId, msg.payload);
           return;
         }
+        case "status":
+        case "shotFired":
+        case "fireFailed": {
+          const unitId = registry.unitOn(connId);
+          if (!unitId) return sendError(ws, "NOT_REGISTERED", `register before ${msg.type}`);
+          if (registry.unitTypeOf(unitId) !== "weapon") {
+            return sendError(ws, "WRONG_UNIT_TYPE", `only weapons send ${msg.type}`);
+          }
+          if (msg.type === "status") return events.onWeaponStatus(unitId, msg.payload);
+          // Shots and failures drive engagements, which come in the next piece.
+          return console.log(`[units] ${unitId} ${msg.type}: ${JSON.stringify(msg.payload)}`);
+        }
         default:
-          // Weapon status, kill reports etc. are handled in later pieces; for
-          // now only check that the sender is a registered unit.
+          // Kill reports etc. are handled in later pieces; for now only check
+          // that the sender is a registered unit.
           if (!registry.unitOn(connId))
             sendError(ws, "NOT_REGISTERED", `register before ${msg.type}`);
       }

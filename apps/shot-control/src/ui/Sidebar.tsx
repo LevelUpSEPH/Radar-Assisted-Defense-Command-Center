@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { LinkStatus, UiToServer } from "../protocol";
 import type { WeaponSocket } from "./useWeaponSocket";
+import { WeaponPanel } from "./WeaponPanel";
 
 const km = (m: number) => `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} km`;
 
@@ -48,6 +49,8 @@ export function Sidebar({ weapon }: { weapon: WeaponSocket }) {
             </ul>
           </section>
 
+          <WeaponPanel state={state} />
+
           <section>
             <h2>This weapon</h2>
             <dl className="facts">
@@ -55,7 +58,7 @@ export function Sidebar({ weapon }: { weapon: WeaponSocket }) {
               <dd>
                 {km(state.minRangeM)} – {km(state.maxRangeM)}
               </dd>
-              <dt>Ammo</dt>
+              <dt>Magazine</dt>
               <dd>{state.ammo} rounds</dd>
               <dt>Prepare</dt>
               <dd>{state.prepareTimeS} s</dd>

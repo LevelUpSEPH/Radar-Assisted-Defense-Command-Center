@@ -92,6 +92,18 @@ export const RadarTrackSchema = z.object({
 });
 export type RadarTrack = z.infer<typeof RadarTrackSchema>;
 
+/** A weapon's state as it reports it (sent on every change and every heartbeat). */
+export const WeaponStatusSchema = z.object({
+  state: WeaponStateSchema,
+  ammo: z.number().int().nonnegative(),
+  minRangeM: Meters,
+  maxRangeM: Meters,
+  engagementId: Id.nullable(),
+  /** When the current PREPARING / RELOADING phase ends, for progress bars. */
+  stateUntil: EpochMs.nullable(),
+});
+export type WeaponStatus = z.infer<typeof WeaponStatusSchema>;
+
 /** The Command Center's fused track, as sent to a weapon. */
 export const SystemTrackSchema = z.object({
   trackId: Id,
@@ -147,18 +159,7 @@ export const ToCommandCenterSchema = z.discriminatedUnion("type", [
   message("tracks", z.object({ scanAt: EpochMs, tracks: z.array(RadarTrackSchema) })),
   message("killReport", z.object({ checkId: Id, destroyed: z.boolean() })),
   // weapon
-  message(
-    "status",
-    z.object({
-      state: WeaponStateSchema,
-      ammo: z.number().int().nonnegative(),
-      minRangeM: Meters,
-      maxRangeM: Meters,
-      engagementId: Id.nullable(),
-      /** When the current PREPARING / RELOADING phase ends, for progress bars. */
-      stateUntil: EpochMs.nullable(),
-    }),
-  ),
+  message("status", WeaponStatusSchema),
   message(
     "shotFired",
     z.object({ engagementId: Id, firedAt: EpochMs, impactAt: EpochMs, impactPoint: LatLonSchema }),

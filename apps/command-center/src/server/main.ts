@@ -2,7 +2,7 @@
 //   npm run dev -w @tdts/command-center [-- --config path/to/command-center.json]
 
 import { resolve } from "node:path";
-import { PLANNING_INTERVAL_MS } from "@tdts/shared";
+import { PLANNING_INTERVAL_MS, type WeaponStatus } from "@tdts/shared";
 import { parseArgs } from "node:util";
 import type { CommandState, UiToServer } from "../protocol";
 import { loadConfig } from "./config";
@@ -40,10 +40,16 @@ async function main() {
   const fusion = new Fusion({ minLikelihoodToEngage: config.minLikelihoodToEngage });
   const refreshTracks = () => fusion.update(picture.tracks(Date.now()));
 
+  // The latest status of every online weapon.
+  const weaponStatus = new Map<string, WeaponStatus>();
+
   const state = (): CommandState => ({
     view: config.view,
     keys: keys.list(),
-    units: registry.view(),
+    units: registry.view().map((u) => {
+      const s = u.unitId && u.status === "ONLINE" ? weaponStatus.get(u.unitId) : undefined;
+      return s ? { ...u, weaponStatus: s } : u;
+    }),
     tracks: fusion.view(),
     minLikelihoodToEngage: config.minLikelihoodToEngage,
   });
@@ -58,7 +64,12 @@ async function main() {
       refreshTracks();
       ui?.publish();
     },
+    onWeaponStatus: (unitId, status) => {
+      weaponStatus.set(unitId, status);
+      ui?.publish();
+    },
     onUnitGone: (unitId) => {
+      weaponStatus.delete(unitId);
       picture.forget(unitId);
       refreshTracks();
     },
@@ -77,6 +88,7 @@ async function main() {
         const unitId = keys.get(msg.payload.key)?.unitId;
         if (!keys.delete(msg.payload.key)) throw new Error(`unknown key ${msg.payload.key}`);
         if (unitId) {
+          weaponStatus.delete(unitId);
           picture.forget(unitId);
           refreshTracks();
         }

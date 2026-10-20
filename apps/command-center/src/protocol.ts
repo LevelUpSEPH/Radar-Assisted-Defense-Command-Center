@@ -8,6 +8,7 @@ import {
   RadarCapabilitiesSchema,
   RadarTrackSchema,
   UnitTypeSchema,
+  WeaponStatusSchema,
   WeaponCapabilitiesSchema,
 } from "@tdts/shared";
 import { z } from "zod";
@@ -81,6 +82,8 @@ export const UnitViewSchema = unitBody({
   status: UnitStatusSchema,
   /** PENDING only: how far it connected from the key's expected position. */
   distanceM: z.number().optional(),
+  /** Weapons only: the latest status the weapon reported (while online). */
+  weaponStatus: WeaponStatusSchema.optional(),
 });
 export type UnitView = z.infer<typeof UnitViewSchema>;
 

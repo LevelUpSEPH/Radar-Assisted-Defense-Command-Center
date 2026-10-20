@@ -1,6 +1,6 @@
 # Shot Control — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 5 in progress**: piece 1 (registers with its device key and a key entered on its page, heartbeats, reconnects, status page with range rings) done. Next: the weapon state machine and status reports.
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 5 in progress**: piece 1 (registers with its device key and a key entered on its page, heartbeats, reconnects, status page with range rings) and piece 2 (state machine, firing solution, status reports; the Command Center shows each weapon's state and ammo) done. Next: engagements, in which the Command Center sends prepare and fire.
 
 A Shot Control is one mortar-like weapon. When the Command Center tells it to prepare, it gets ready (busy), reports ready, and on `fire` computes its own firing solution and fires where the target will be. A computed shot always hits (ideal test scene), so shells are not simulated anywhere. Then it reloads (busy) and is available again. Many Shot Controls run at once, one process each.
 
@@ -73,7 +73,7 @@ The registration key is entered on the weapon's page and remembered, exactly lik
 | any                            | `trackUpdate`      | replace the stored track (only for the current engagement)                         |
 | any other                      | unexpected command | ignored, reported in `error`-level log; state unchanged                            |
 
-A `status` is sent on every state change, on range changes, and with every heartbeat. `stateUntil` carries the end of the current `PREPARING` / `RELOADING` phase for progress bars.
+A `status` is sent when the weapon registers, on every state change, and every `HEARTBEAT_INTERVAL_MS` (2 s). The state machine is plain logic (`weapon.ts`, driven by a clock and fully unit-tested); the program ticks it every 100 ms, takes commands from the Command Center, and reports `status`, `shotFired` and `fireFailed`. A command that doesn't fit the weapon's state is logged and ignored. The page shows the state (BUSY while preparing, firing or reloading), a countdown bar for prepare and reload, ammo, the engagement with its firing solution, and the last shot. `stateUntil` carries the end of the current `PREPARING` / `RELOADING` phase for progress bars.
 
 ---
 

@@ -1,3 +1,4 @@
+import type { WeaponState } from "@tdts/shared";
 import type { UiToServer, UnitView } from "../protocol";
 
 const km = (m: number) => `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} km`;
@@ -26,6 +27,15 @@ export function UnitsPanel({
                   {u.name}
                 </span>
                 <span className="muted small">{describe(u)}</span>
+                {u.unitType === "weapon" && u.weaponStatus && (
+                  <span className="small">
+                    <span className={`pill ${WEAPON_PILL[u.weaponStatus.state]}`}>
+                      {u.weaponStatus.state}
+                    </span>{" "}
+                    {u.weaponStatus.ammo} rounds left
+                    {u.weaponStatus.engagementId && ` · ${u.weaponStatus.engagementId}`}
+                  </span>
+                )}
                 {u.deviceId && (
                   <span className="muted small" title="Fingerprint of the unit's device key">
                     device <code className="fingerprint">{u.deviceId}</code>
@@ -69,6 +79,15 @@ const PILL: Record<UnitView["status"], string> = {
   ONLINE: "pill-ok",
   OFFLINE: "",
   PENDING: "pill-warn",
+};
+
+const WEAPON_PILL: Record<WeaponState, string> = {
+  IDLE: "pill-ok",
+  READY: "pill-ok",
+  PREPARING: "pill-warn",
+  FIRING: "pill-warn",
+  RELOADING: "pill-warn",
+  EMPTY: "pill-bad",
 };
 
 function describe(u: UnitView): string {
