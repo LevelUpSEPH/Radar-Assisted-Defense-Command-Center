@@ -11,7 +11,7 @@ export function App() {
         <MapView
           view={cc.state?.view ?? null}
           units={cc.state?.units ?? []}
-          airTracks={cc.state?.airTracks ?? []}
+          tracks={cc.state?.tracks ?? []}
         />
       </main>
     </div>

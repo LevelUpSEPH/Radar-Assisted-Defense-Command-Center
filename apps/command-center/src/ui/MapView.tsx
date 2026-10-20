@@ -10,9 +10,11 @@ import {
   Tooltip,
   useMap,
 } from "react-leaflet";
-import type { AirTrack, UnitView } from "../protocol";
+import type { SystemTrackView, UnitView } from "../protocol";
 import { IFF_ORDER, IFF_STYLE } from "./track-style";
 
+// Areas, trails and lines are drawn with `interactive: false`: clicks and hovers
+// pass through them, so only points (tracks, units) can be picked.
 const RADAR_COLOR = "#22c55e";
 const WEAPON_COLOR = "#a855f7";
 const OFFLINE_COLOR = "#64748b";
@@ -24,11 +26,11 @@ const toLatLng = (p: LatLon): [number, number] => [p.lat, p.lon];
 export function MapView({
   view,
   units,
-  airTracks,
+  tracks,
 }: {
   view: MapViewConfig | null;
   units: UnitView[];
-  airTracks: AirTrack[];
+  tracks: SystemTrackView[];
 }) {
   // Pending units aren't part of the network yet, so they aren't drawn.
   const shown = units.filter((u) => u.status !== "PENDING");
@@ -44,8 +46,8 @@ export function MapView({
       {shown.map((u) => (
         <UnitMarker key={u.key} unit={u} />
       ))}
-      {airTracks.map((t) => (
-        <AirTrackMarker key={`${t.unitId}/${t.radarTrackId}`} track={t} />
+      {tracks.map((t) => (
+        <SystemTrackMarker key={t.trackId} track={t} />
       ))}
       <Legend />
     </MapContainer>
@@ -56,7 +58,13 @@ function UnitMarker({ unit }: { unit: UnitView }) {
   const online = unit.status === "ONLINE";
   const color = !online ? OFFLINE_COLOR : unit.unitType === "radar" ? RADAR_COLOR : WEAPON_COLOR;
   const center = toLatLng(unit.position);
-  const ring = { color, weight: 1, opacity: online ? 0.7 : 0.4, fillOpacity: 0.04 };
+  const ring = {
+    color,
+    weight: 1,
+    opacity: online ? 0.7 : 0.4,
+    fillOpacity: 0.04,
+    interactive: false,
+  };
   const label = (
     <Tooltip>
       <strong>{unit.unitId}</strong> · {unit.name} · {unit.status.toLowerCase()}
@@ -88,26 +96,35 @@ function UnitMarker({ unit }: { unit: UnitView }) {
   );
 }
 
-/** A track as a radar reports it: colored by drone likelihood, heading shown 60 s ahead. */
-function AirTrackMarker({ track: t }: { track: AirTrack }) {
-  const { color, label } = IFF_STYLE[t.iff];
+/**
+ * A fused track: colored by its classification, with a trail of recent fused
+ * positions and its heading 60 s ahead. Engageable enemies get an outer ring.
+ */
+function SystemTrackMarker({ track: t }: { track: SystemTrackView }) {
+  const { color, label } = IFF_STYLE[t.classification];
   const ahead =
     t.speedMps > 0 ? extrapolate(t.position, t.speedMps, t.headingDeg, PROJECT_S) : null;
   return (
     <>
-      {/* Where the radar reported it in recent sweeps. */}
       {t.trail.map((p, i) => (
         <CircleMarker
           key={i}
           center={toLatLng(p)}
           radius={1.5}
-          pathOptions={{ color, weight: 0, fillColor: color, fillOpacity: 0.5 }}
+          pathOptions={{ color, weight: 0, fillColor: color, fillOpacity: 0.5, interactive: false }}
         />
       ))}
       {ahead && (
         <Polyline
           positions={[toLatLng(t.position), toLatLng(ahead)]}
-          pathOptions={{ color, weight: 1.5, opacity: 0.8, dashArray: "5 5" }}
+          pathOptions={{ color, weight: 1.5, opacity: 0.8, dashArray: "5 5", interactive: false }}
+        />
+      )}
+      {t.engageable && (
+        <CircleMarker
+          center={toLatLng(t.position)}
+          radius={11}
+          pathOptions={{ color, weight: 1.5, fillOpacity: 0, dashArray: "3 3", interactive: false }}
         />
       )}
       <CircleMarker
@@ -116,12 +133,14 @@ function AirTrackMarker({ track: t }: { track: AirTrack }) {
         pathOptions={{ color, weight: 2, fillColor: color, fillOpacity: 0.85 }}
       >
         <Tooltip>
-          <strong>{t.radarTrackId}</strong> · {t.unitId}
+          <strong>{t.trackId}</strong> · {label}
+          {t.classificationSource === "operator" && " (operator)"}
+          {t.engageable && " · engageable"}
           <br />
-          {t.altitudeM.toFixed(0)} m · {t.speedMps.toFixed(0)} m/s · {t.headingDeg.toFixed(0)}°
+          {t.altitudeM.toFixed(0)} m · {t.speedMps.toFixed(0)} m/s · {t.headingDeg.toFixed(0)}° ·
+          drone likelihood {Math.round(t.likelihood * 100)}%
           <br />
-          {t.iff === "UNKNOWN" ? label : `Reported ${label.toLowerCase()}`} · drone likelihood{" "}
-          {Math.round(t.likelihood * 100)}%
+          seen by {t.sources.map((s) => `${s.unitId} ${s.radarTrackId}`).join(", ")}
         </Tooltip>
       </CircleMarker>
     </>

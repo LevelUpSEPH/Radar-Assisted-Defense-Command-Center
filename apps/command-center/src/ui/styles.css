@@ -448,3 +448,59 @@ code.fingerprint {
   margin-right: 6px;
   vertical-align: 1px;
 }
+
+/* ---------------------------------------------------------------- system tracks */
+
+.system-track.engageable {
+  border-color: color-mix(in srgb, #ef4444 55%, var(--border));
+}
+
+.badge-engageable {
+  margin-left: 8px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.enemy-count {
+  color: #f87171;
+}
+
+.classify {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.classify-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.classify-actions button.small {
+  padding: 2px 10px;
+  font-size: 12px;
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+.classify-actions button.on-friendly {
+  background: color-mix(in srgb, #60a5fa 25%, transparent);
+  border-color: #60a5fa;
+}
+
+.classify-actions button.on-enemy {
+  background: color-mix(in srgb, #ef4444 25%, transparent);
+  border-color: #ef4444;
+}
+
+.classify-actions button.on-unknown {
+  background: color-mix(in srgb, #facc15 20%, transparent);
+  border-color: #facc15;
+}

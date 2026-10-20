@@ -1,0 +1,13 @@
+{
+  "name": "Radar East",
+  "position": {
+    "lat": 47.45,
+    "lon": 8.75
+  },
+  "rangeM": 35000,
+  "scanIntervalMs": 1000,
+  "positionNoiseM": 50,
+  "commandCenterUrl": "ws://localhost:7100",
+  "worldSimUrl": "ws://localhost:7000",
+  "uiPort": 7202
+}

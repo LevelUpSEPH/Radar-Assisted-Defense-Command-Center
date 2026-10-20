@@ -23,6 +23,17 @@
         "scenario/radars/north.json"
       ],
       "port": 7201
+    },
+    {
+      "name": "radar-east",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "node_modules/tsx/dist/cli.mjs",
+        "apps/radar-center/src/server/main.ts",
+        "--config",
+        "scenario/radars/east.json"
+      ],
+      "port": 7202
     }
   ]
 }

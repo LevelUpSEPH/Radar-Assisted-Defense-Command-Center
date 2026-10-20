@@ -2,11 +2,13 @@
 //   npm run dev -w @tdts/command-center [-- --config path/to/command-center.json]
 
 import { resolve } from "node:path";
+import { PLANNING_INTERVAL_MS } from "@tdts/shared";
 import { parseArgs } from "node:util";
 import type { CommandState, UiToServer } from "../protocol";
 import { loadConfig } from "./config";
 import { loadDataFile, saveDataFile } from "./data-file";
 import { AirPicture } from "./air-picture";
+import { Fusion } from "./fusion";
 import { KeyStore } from "./keys";
 import { Registry } from "./registry";
 import { startUiServer, type UiServer } from "./ui-server";
@@ -33,13 +35,17 @@ async function main() {
     return saving;
   };
 
+  // Radars' reports → fused system tracks with a classification.
   const picture = new AirPicture();
+  const fusion = new Fusion({ minLikelihoodToEngage: config.minLikelihoodToEngage });
+  const refreshTracks = () => fusion.update(picture.tracks(Date.now()));
 
   const state = (): CommandState => ({
     view: config.view,
     keys: keys.list(),
     units: registry.view(),
-    airTracks: picture.tracks(Date.now()),
+    tracks: fusion.view(),
+    minLikelihoodToEngage: config.minLikelihoodToEngage,
   });
 
   let ui: UiServer | null = null;
@@ -49,9 +55,13 @@ async function main() {
     },
     onTracks: (unitId, report) => {
       picture.report(unitId, report.scanAt, report.tracks, Date.now());
+      refreshTracks();
       ui?.publish();
     },
-    onUnitGone: (unitId) => picture.forget(unitId),
+    onUnitGone: (unitId) => {
+      picture.forget(unitId);
+      refreshTracks();
+    },
     onChange: () => ui?.publish(),
   });
 
@@ -66,12 +76,23 @@ async function main() {
       case "deleteKey": {
         const unitId = keys.get(msg.payload.key)?.unitId;
         if (!keys.delete(msg.payload.key)) throw new Error(`unknown key ${msg.payload.key}`);
-        if (unitId) picture.forget(unitId);
+        if (unitId) {
+          picture.forget(unitId);
+          refreshTracks();
+        }
         // A deleted key takes its unit with it; a connected unit is told and dropped.
         const connId = registry.forgetKey(msg.payload.key);
         if (connId) units.disconnect(connId, "revoked");
         await save();
         console.log(`[keys] deleted ${msg.payload.key}`);
+        break;
+      }
+      case "classifyTrack": {
+        const { trackId, classification } = msg.payload;
+        if (!fusion.setOverride(trackId, classification)) {
+          throw new Error(`${trackId} is no longer tracked`);
+        }
+        console.log(`[tracks] operator set ${trackId} to ${classification ?? "radar reports"}`);
         break;
       }
       case "approveUnit": {
@@ -91,7 +112,15 @@ async function main() {
   };
   ui = await startUiServer(config.uiPort, state, onCommand);
 
+  // Once a second: radars that went quiet drop out of the picture even when
+  // nothing else happens.
+  const tick = setInterval(() => {
+    refreshTracks();
+    ui?.publish();
+  }, PLANNING_INTERVAL_MS);
+
   const shutdown = async () => {
+    clearInterval(tick);
     await Promise.all([units.close(), ui?.close()]);
     process.exit(0);
   };

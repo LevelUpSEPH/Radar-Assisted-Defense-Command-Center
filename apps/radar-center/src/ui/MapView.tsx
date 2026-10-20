@@ -13,6 +13,8 @@ import {
 import type { RadarState, RadarTrack } from "../protocol";
 import { IFF_ORDER, IFF_STYLE } from "./track-style";
 
+// Areas, trails and lines are drawn with `interactive: false`: clicks and hovers
+// pass through them, so only points (tracks, units) can be picked.
 const RADAR_COLOR = "#22c55e";
 /** How far ahead the dashed trajectory line reaches. */
 const PROJECT_S = 60;
@@ -33,7 +35,13 @@ export function MapView({ state }: { state: RadarState | null }) {
           <Circle
             center={toLatLng(state.position)}
             radius={state.rangeM}
-            pathOptions={{ color: RADAR_COLOR, weight: 1, opacity: 0.7, fillOpacity: 0.05 }}
+            pathOptions={{
+              color: RADAR_COLOR,
+              weight: 1,
+              opacity: 0.7,
+              fillOpacity: 0.05,
+              interactive: false,
+            }}
           />
           <CircleMarker
             center={toLatLng(state.position)}
@@ -71,14 +79,26 @@ function TrackMarker({ track: t }: { track: RadarTrack }) {
           key={i}
           center={toLatLng(p)}
           radius={1.5}
-          pathOptions={{ color, weight: 0, fillColor: color, fillOpacity: 0.5 * opacity }}
+          pathOptions={{
+            color,
+            weight: 0,
+            fillColor: color,
+            fillOpacity: 0.5 * opacity,
+            interactive: false,
+          }}
         />
       ))}
       {/* Where it's heading: the fitted trajectory, projected ahead. */}
       {ahead && (
         <Polyline
           positions={[toLatLng(t.position), toLatLng(ahead)]}
-          pathOptions={{ color, weight: 1.5, opacity: 0.8 * opacity, dashArray: "5 5" }}
+          pathOptions={{
+            color,
+            weight: 1.5,
+            opacity: 0.8 * opacity,
+            dashArray: "5 5",
+            interactive: false,
+          }}
         />
       )}
       <CircleMarker

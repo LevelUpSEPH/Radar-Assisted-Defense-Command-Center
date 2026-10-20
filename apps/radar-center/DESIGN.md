@@ -34,7 +34,7 @@ Not its job: deciding a track's classification (the Command Center does), or fus
 }
 ```
 
-Start: `npm run dev -w @tdts/radar-center -- --config scenario/radars/north.json [--key TDTS-…]`.
+Start: `npm run dev -w @tdts/radar-center -- --config scenario/radars/north.json [--key TDTS-…]`. Two radars are configured: `north.json` (Radar North, page on 7201) and `east.json` (Radar East, 7202); their coverage overlaps around Zürich, so the Command Center has something to fuse.
 
 **Registration key:** not in the config. The operator copies a radar key from the Command Center and enters it on the radar's page (**Register**). The radar remembers it in `registrationFile` (default `apps/radar-center/data/registrations/<config name>`) and uses it on every start. The page asks for a key whenever there is none or the current one stopped working (rejected or revoked), and offers **Change key** otherwise; a new key takes effect immediately, without a restart. `--key` does the same from the command line, for scripted launches.
 

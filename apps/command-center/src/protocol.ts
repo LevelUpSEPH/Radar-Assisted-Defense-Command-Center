@@ -2,6 +2,7 @@
 // records it saves. Private to this program; messages are { type, payload }.
 
 import {
+  IffSchema,
   LatLonSchema,
   MapViewSchema,
   RadarCapabilitiesSchema,
@@ -93,14 +94,47 @@ export const AirTrackSchema = RadarTrackSchema.extend({
 });
 export type AirTrack = z.infer<typeof AirTrackSchema>;
 
+/** One radar's contribution to a system track. */
+export const TrackSourceSchema = z.object({
+  unitId: z.string(),
+  radarTrackId: z.string(),
+  iff: IffSchema,
+  likelihood: z.number(),
+});
+export type TrackSource = z.infer<typeof TrackSourceSchema>;
+
+/** A fused track: one object, as seen by one or more radars (DESIGN.md §4–5). */
+export const SystemTrackViewSchema = z.object({
+  /** "S-0001", … */
+  trackId: z.string(),
+  position: LatLonSchema,
+  altitudeM: z.number(),
+  speedMps: z.number(),
+  headingDeg: z.number(),
+  /** The highest drone likelihood any radar reports. */
+  likelihood: z.number(),
+  observedAt: z.number(),
+  sources: z.array(TrackSourceSchema),
+  classification: IffSchema,
+  /** Who decided: the radar reports, or the operator overriding them. */
+  classificationSource: z.enum(["radars", "operator"]),
+  /** Enemy, and likely enough a drone to engage. */
+  engageable: z.boolean(),
+  /** Recent fused positions, oldest first. */
+  trail: z.array(LatLonSchema),
+});
+export type SystemTrackView = z.infer<typeof SystemTrackViewSchema>;
+
 // ---------------------------------------------------------------- messages
 
 export const CommandStateSchema = z.object({
   view: MapViewSchema,
   keys: z.array(KeyRecordSchema),
   units: z.array(UnitViewSchema),
-  /** What the radars report right now (not yet fused). */
-  airTracks: z.array(AirTrackSchema),
+  /** Fused tracks with their classification. */
+  tracks: z.array(SystemTrackViewSchema),
+  /** Enemy tracks at or above this drone likelihood are engageable. */
+  minLikelihoodToEngage: z.number(),
 });
 export type CommandState = z.infer<typeof CommandStateSchema>;
 
@@ -116,5 +150,10 @@ export const UiToServerSchema = z.discriminatedUnion("type", [
   /** Pending units are identified by their key (they have no unit id yet). */
   z.object({ type: z.literal("approveUnit"), payload: z.object({ key: z.string() }) }),
   z.object({ type: z.literal("rejectUnit"), payload: z.object({ key: z.string() }) }),
+  /** The operator overrides a track's classification; null hands it back to the radars. */
+  z.object({
+    type: z.literal("classifyTrack"),
+    payload: z.object({ trackId: z.string(), classification: IffSchema.nullable() }),
+  }),
 ]);
 export type UiToServer = z.infer<typeof UiToServerSchema>;

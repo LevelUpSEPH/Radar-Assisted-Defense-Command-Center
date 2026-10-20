@@ -1,6 +1,6 @@
 # Command Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) piece 3 (units register with keys, heartbeats, units list and map markers), piece 4 (approve or reject pending units) and piece 5 (device keys) done. Milestone 4 so far: radars' tracks arrive and are shown as the air picture (not yet fused).
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) piece 3 (units register with keys, heartbeats, units list and map markers), piece 4 (approve or reject pending units) and piece 5 (device keys) done. Milestone 4: radars' tracks arrive, are fused into system tracks and classified (radar reports, operator override, engageability).
 
 The Command Center is the brain of the network. It registers radars and weapons, builds one picture of the sky from all radar reports, decides what is an enemy, and tells weapons when to prepare and fire. It never sees ground truth and **never connects to the World Simulator**: everything it knows comes from radar and weapon reports.
 
@@ -107,14 +107,16 @@ Every registered radar sends `tracks` after each sweep. The Command Center keeps
 - The operator page shows them on the map exactly as the radar draws them (colored by friend/enemy status: friend blue, enemy red, unknown yellow; a trail of the last 10 reported positions; heading line 60 s ahead) and in an **Air picture** list (most likely drones first; "Reported friend" / "Reported enemy" when a radar says so). Drone likelihood is shown as a number and word in neutral colors. The radar doesn't send its trails; the Command Center builds each trail from successive reports.
 - The map starts on the configured view and, the first time units are known, frames their coverage (once; after that the operator pans freely).
 
-### Track fusion (planned)
+### Track fusion (done)
 
-Several radars may report the same object. The Command Center keeps **system tracks** (`T-0042`):
+Several radars may report the same object. The Command Center keeps **system tracks** (`S-0042`; the `S` keeps them apart from radar track ids like `T-0007`):
 
-- A radar track already linked to a system track updates it.
-- A new radar track joins the nearest system track within `FUSION_GATE_M` (1 km) whose heading is within `FUSION_HEADING_GATE_DEG` (30°). Otherwise it creates a new system track.
-- A system track's position, speed and heading are the average of its linked radar tracks' latest values. Its likelihood is the highest of them.
-- A radar track not reported in a radar's latest `tracks` message is unlinked. A system track with no linked radar tracks is dropped.
+- A radar track already linked to a system track stays linked for as long as its radar reports it.
+- A new radar track joins the nearest system track within `FUSION_GATE_M` (1 km) whose heading is within `FUSION_HEADING_GATE_DEG` (30°). The heading gate is skipped when either is slower than 5 m/s, where heading means little. **A system track takes at most one track per radar**: a radar never sees one object twice. Otherwise the radar track starts a new system track.
+- **Fused values:** radars sweep at different moments, so each linked report is first projected (dead-reckoned) to the newest report's time, then positions and altitudes are averaged and speed and heading come from the averaged velocity vector. Likelihood is the highest any radar reports. The same projection is used when matching a new radar track against a system track.
+- A radar track not reported in its radar's latest `tracks` message is unlinked. A system track with no linked radar tracks is dropped. Each system track keeps a trail of its last 10 fused positions for the map.
+- Fusion runs on every report and once a second (`PLANNING_INTERVAL_MS`), so radars that went quiet drop out even when nothing else happens.
+- Not done (yet): splitting a system track whose radar tracks drift apart after being fused.
 
 ---
 
@@ -126,8 +128,8 @@ Every system track has `classification`: `UNKNOWN` | `FRIENDLY` | `ENEMY`.
   1. `FRIENDLY` if **at least one** linked radar reports it friendly;
   2. otherwise `ENEMY` if any linked radar reports it enemy;
   3. otherwise `UNKNOWN`.
-- **Override:** the operator can set the classification on the map. Once overridden, radar reports are shown but no longer change it, until the operator clears the override. Overriding to `ENEMY` is the only way to engage a track that a radar reports as friendly.
-- **Engagement:** only `ENEMY` tracks with `likelihood ≥ minLikelihoodToEngage` are engaged.
+- **Override:** the operator can set the classification in the tracks list (Friend / Enemy / Unknown; **Use radar reports** clears it). Once overridden, radar reports are shown but no longer change it, until the operator clears the override. Overriding to `ENEMY` is the only way to engage a track that a radar reports as friendly.
+- **Engagement:** only `ENEMY` tracks with `likelihood ≥ minLikelihoodToEngage` (config, default 0.6) are engaged. Such tracks are marked **Engageable** (list badge, ring on the map) and sorted first; an enemy below the threshold says so.
 - **Cancellation:** if a track stops being an engageable enemy while an engagement has not fired yet, the engagement is cancelled.
 
 ---
@@ -186,7 +188,7 @@ The weapon reports the shot, the Command Center tells the radar, the radar repor
 - **Map:** radars (with range circles), weapons (min/max range rings, state, ammo), system tracks (colored by classification, with heading vector and predicted intercept point), shots in flight (launch point → aim point, with arrival countdown).
 - **Keys panel:** generate (auto or manual with name + approximate position), list with status, copy, delete (with confirmation), revoke.
 - **Units panel:** online/offline/pending, approve/reject pending units.
-- **Tracks panel:** classification, likelihood, reporting radars, override controls.
+- **Tracks panel (done):** system tracks, engageable enemies first: classification and who decided it, engageability, altitude/speed/heading, likelihood, which radars see it (with each radar's report), override controls.
 - **Engagements panel:** state, weapon, target, approve/reject; fire-mode switch.
 - **Weapon panel:** edit a weapon's ranges (`setRanges`).
 

@@ -16,6 +16,8 @@ export const KIND_COLOR: Record<TargetKind, string> = {
   friendly: "#3b82f6",
   bird: "#f59e0b",
 };
+// Areas, trails and lines are drawn with `interactive: false`: clicks and hovers
+// pass through them, so only points (tracks, units) can be picked.
 const RADAR_COLOR = "#22c55e";
 const KILL_COLOR = "#fb923c";
 const KILL_DISPLAY_MS = 3_000;
@@ -37,10 +39,14 @@ export function MapView({ view, state }: { view: MapViewConfig | null; state: Wo
           key={r.radarId}
           center={toLatLng(r.position)}
           radius={r.rangeM}
-          pathOptions={{ color: RADAR_COLOR, weight: 1, opacity: 0.6, fillOpacity: 0.04 }}
-        >
-          <Tooltip>radar {r.radarId}</Tooltip>
-        </Circle>
+          pathOptions={{
+            color: RADAR_COLOR,
+            weight: 1,
+            opacity: 0.6,
+            fillOpacity: 0.04,
+            interactive: false,
+          }}
+        />
       ))}
       {state?.radars.map((r) => (
         <CircleMarker
@@ -57,7 +63,13 @@ export function MapView({ view, state }: { view: MapViewConfig | null; state: Wo
         <Polyline
           key={`${t.id}-path`}
           positions={[toLatLng(t.position), toLatLng(t.destination)]}
-          pathOptions={{ color: KIND_COLOR[t.kind], weight: 1, opacity: 0.4, dashArray: "4 6" }}
+          pathOptions={{
+            color: KIND_COLOR[t.kind],
+            weight: 1,
+            opacity: 0.4,
+            dashArray: "4 6",
+            interactive: false,
+          }}
         />
       ))}
       {state?.targets.map((t) => (

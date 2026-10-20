@@ -1,5 +1,5 @@
-import { AirPanel } from "./AirPanel";
 import { KeysPanel } from "./KeysPanel";
+import { TracksPanel } from "./TracksPanel";
 import { UnitsPanel } from "./UnitsPanel";
 import type { CommandSocket } from "./useCommandSocket";
 
@@ -27,7 +27,12 @@ export function Sidebar({ cc }: { cc: CommandSocket }) {
         </div>
       )}
 
-      <AirPanel tracks={state?.airTracks ?? []} />
+      <TracksPanel
+        tracks={state?.tracks ?? []}
+        minLikelihoodToEngage={state?.minLikelihoodToEngage ?? 0.6}
+        disabled={!connected}
+        send={send}
+      />
 
       <UnitsPanel units={state?.units ?? []} disabled={!connected} send={send} />
 
