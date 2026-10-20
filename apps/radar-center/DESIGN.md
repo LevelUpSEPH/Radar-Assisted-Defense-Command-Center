@@ -1,6 +1,6 @@
 # Radar Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 4 in progress**: piece 1 (registers with its device key, heartbeats, reconnects, status page) done. Next: scanning the World Simulator.
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 4 in progress**: piece 1 (registers with its device key, heartbeats, reconnects, status page) and piece 2 (scans the World Simulator; tracks with altitude, trajectory, speed and drone likelihood on its page) done. Next: reporting tracks to the Command Center.
 
 A Radar Center is one radar site, and the **only** kind of program that connects to the World Simulator. It scans it for what is physically in range, turns raw detections into tracks with speed, heading and a likelihood of being a flying vehicle, and reports them to the Command Center. Its operator can mark tracks as friendly or enemy. Many Radar Centers run at once, one process each.
 
@@ -54,17 +54,20 @@ The registration key can be in the config (`"key"`) or passed with `--key`; with
 ## 4. Each scan
 
 1. Send `scan { scanId, position, rangeM }` to the World Simulator and wait for `scanResult`. Its `observedAt` is the observation time for every detection in it; use it (not the arrival time) for speed estimation and as the track's `observedAt`.
-2. **Local tracks.** The radar keeps its own track IDs (`<radar name>-0007`). The World Simulator's `truthId` is used only to link consecutive scans of the same object into one track, a stand-in for real association logic. It is **never** sent to the Command Center.
+2. **Local tracks.** The radar keeps its own track IDs (`T-0007`; the Command Center tells radars apart by unit id). The World Simulator's `truthId` is used only to link consecutive scans of the same object into one track, a stand-in for real association logic. It is **never** sent to the Command Center.
 3. **Noise.** Each reported position is the true position moved a random distance (up to `positionNoiseM`) in a random direction.
-4. **Speed and heading** come from the noisy positions of the last 5 scans (first to last position over elapsed time). A track needs 2 scans before it has speed and heading; until then it reports 0.
+4. **Trajectory: speed, heading and position** come from a least-squares straight-line fit through the noisy positions of the last 10 scans (on a flat local grid in meters). Fitting averages the noise out: with 50 m noise, speed is typically within ~2 m/s and heading within ~1–2° once 10 scans are in, where a first-to-last estimate could be off by 20% or more. The reported position is the fitted line at the newest scan, so it is smoother than any single measurement. With 2 scans the estimate is first-to-last; with 1 scan the track reports speed 0 ("measuring").
 5. **Vehicle likelihood (0–1):**
-   - `speedScore` = 1 above 30 m/s, falling linearly to 0 at 10 m/s (birds are slow).
+   - `speedScore` = 1 above 30 m/s, falling linearly to 0 at 10 m/s (birds are slow). Before speed is known (1 scan) it counts as 0.5.
    - `likelihood = 0.6 × signature + 0.4 × speedScore`, plus ±0.05 random noise, clamped to [0, 1].
-   - Smoothed over scans (moving average), so it settles as the track ages.
+   - Smoothed over scans (exponential moving average, newest scan weighted 0.3), so it settles as the track ages.
+   - Shown in three bands: ≥ 70% likely drone, 40–70% unsure, < 40% unlikely.
 6. **IFF:** the operator's marking if there is one; otherwise `FRIENDLY` if the target answered IFF, else `UNKNOWN`.
 7. Send `tracks { scanAt, tracks: [...] }` to the Command Center, including every current track (also those not seen this scan but not yet dropped).
 
-A track not seen for `RADAR_TRACK_DROP_SCANS` (3) scans is dropped.
+A track not seen for `RADAR_TRACK_DROP_SCANS` (3) scans is dropped. An object that comes back after that gets a new track id.
+
+Scanning runs whether or not the radar is registered: a radar keeps watching the sky even while the Command Center is unreachable. Altitude is reported as measured (no noise).
 
 ---
 
@@ -82,8 +85,10 @@ If the track is unknown (already dropped), it answers `destroyed: true` without 
 ## 6. UI (port from config)
 
 - **Status bar:** registration state (registered / pending / rejected / revoked), connections, unit id.
-- **Small map:** radar position, range circle, tracks with heading vectors.
-- **Track table:** id, speed, heading, altitude, likelihood, IFF; buttons to mark `FRIENDLY` / `ENEMY` / `UNKNOWN` (or clear the marking).
+- **Links:** Command Center registration and World Simulator scanning.
+- **Map:** radar position and range circle; each track as a dot colored by drone likelihood, its measured positions as a faint trail, and a dashed line showing where it will be in 60 s.
+- **Tracks list:** only what a radar can measure: id, altitude, speed, heading (degrees and compass point) and drone likelihood (bar, percentage, band). Tracks missing from recent scans are dimmed.
+- **IFF (later piece):** buttons to mark `FRIENDLY` / `ENEMY` / `UNKNOWN` (or clear the marking).
 
 The marking is a **report** to the Command Center, not a decision. It is sent in the `iff` field of the track's next `tracks` report.
 

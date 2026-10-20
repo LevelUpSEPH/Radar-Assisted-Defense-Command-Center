@@ -1,10 +1,21 @@
-import type { LatLon } from "@tdts/shared";
+import { extrapolate, type LatLon } from "@tdts/shared";
 import { latLng } from "leaflet";
 import { useEffect, useRef } from "react";
-import { Circle, CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
-import type { RadarState } from "../protocol";
+import {
+  Circle,
+  CircleMarker,
+  MapContainer,
+  Polyline,
+  TileLayer,
+  Tooltip,
+  useMap,
+} from "react-leaflet";
+import type { RadarState, RadarTrack } from "../protocol";
+import { LIKELIHOOD_BANDS, likelihoodBand } from "./likelihood";
 
 const RADAR_COLOR = "#22c55e";
+/** How far ahead the dashed trajectory line reaches. */
+const PROJECT_S = 60;
 
 const toLatLng = (p: LatLon): [number, number] => [p.lat, p.lon];
 
@@ -36,9 +47,55 @@ export function MapView({ state }: { state: RadarState | null }) {
           >
             <Tooltip>{state.name}</Tooltip>
           </CircleMarker>
+          {state.tracks.map((t) => (
+            <TrackMarker key={t.radarTrackId} track={t} />
+          ))}
         </>
       )}
+      <Legend />
     </MapContainer>
+  );
+}
+
+function TrackMarker({ track: t }: { track: RadarTrack }) {
+  const { color } = likelihoodBand(t.likelihood);
+  const opacity = t.missedScans > 0 ? 0.4 : 1;
+  const moving = t.trail.length >= 2 && t.speedMps > 0;
+  const ahead = moving ? extrapolate(t.position, t.speedMps, t.headingDeg, PROJECT_S) : null;
+
+  return (
+    <>
+      {/* What the radar measured: noisy points. */}
+      {t.trail.map((p, i) => (
+        <CircleMarker
+          key={i}
+          center={toLatLng(p)}
+          radius={1.5}
+          pathOptions={{ color, weight: 0, fillColor: color, fillOpacity: 0.5 * opacity }}
+        />
+      ))}
+      {/* Where it's heading: the fitted trajectory, projected ahead. */}
+      {ahead && (
+        <Polyline
+          positions={[toLatLng(t.position), toLatLng(ahead)]}
+          pathOptions={{ color, weight: 1.5, opacity: 0.8 * opacity, dashArray: "5 5" }}
+        />
+      )}
+      <CircleMarker
+        center={toLatLng(t.position)}
+        radius={6}
+        pathOptions={{ color, weight: 2, fillColor: color, fillOpacity: 0.85 * opacity, opacity }}
+      >
+        <Tooltip>
+          <strong>{t.radarTrackId}</strong>
+          <br />
+          {t.altitudeM.toFixed(0)} m ·{" "}
+          {moving ? `${t.speedMps.toFixed(0)} m/s · ${t.headingDeg.toFixed(0)}°` : "measuring…"}
+          <br />
+          drone likelihood {Math.round(t.likelihood * 100)}%
+        </Tooltip>
+      </CircleMarker>
+    </>
   );
 }
 
@@ -52,4 +109,20 @@ function FitToRange({ position, rangeM }: { position: LatLon; rangeM: number }) 
     map.fitBounds(latLng(position.lat, position.lon).toBounds(rangeM * 2.2));
   }, [map, position, rangeM]);
   return null;
+}
+
+function Legend() {
+  return (
+    <div className="legend leaflet-bottom leaflet-left">
+      <div className="leaflet-control">
+        {LIKELIHOOD_BANDS.map((b) => (
+          <div key={b.label} className="legend-item">
+            <span className="swatch" style={{ background: b.color }} />
+            {b.label}
+          </div>
+        ))}
+        <div className="legend-item muted">- - - next {PROJECT_S} s</div>
+      </div>
+    </div>
+  );
 }

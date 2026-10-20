@@ -1,4 +1,5 @@
 import type { LinkStatus } from "../protocol";
+import { TracksPanel } from "./TracksPanel";
 import type { RadarSocket } from "./useRadarSocket";
 
 export function Sidebar({ radar }: { radar: RadarSocket }) {
@@ -19,9 +20,28 @@ export function Sidebar({ radar }: { radar: RadarSocket }) {
       {state && (
         <>
           <section>
-            <h2>Command Center</h2>
-            <LinkCard link={state.link} url={state.commandCenterUrl} />
+            <h2>Links</h2>
+            <ul className="list">
+              <li>
+                <LinkCard link={state.link} url={state.commandCenterUrl} />
+              </li>
+              <li className="row">
+                <div className="row-main">
+                  <span>World Simulator</span>
+                  <span className="muted small">
+                    {state.worldConnected
+                      ? `Scanning every ${(state.scanIntervalMs / 1000).toFixed(1)} s`
+                      : "Can't see anything: retrying every 2 s"}
+                  </span>
+                </div>
+                <span className={`pill ${state.worldConnected ? "pill-ok" : "pill-bad"}`}>
+                  {state.worldConnected ? "Scanning" : "Offline"}
+                </span>
+              </li>
+            </ul>
           </section>
+
+          <TracksPanel tracks={state.tracks} />
 
           <section>
             <h2>This radar</h2>
@@ -61,7 +81,15 @@ function LinkCard({ link, url }: { link: LinkStatus; url: string }) {
   return (
     <div className="row">
       <div className="row-main">
-        <span>{link.state === "registered" ? <strong>{link.unitId}</strong> : url}</span>
+        <span title={url}>
+          Command Center
+          {link.state === "registered" && (
+            <>
+              {" "}
+              · <strong>{link.unitId}</strong>
+            </>
+          )}
+        </span>
         <span className="muted small">{explain(link)}</span>
       </div>
       <span className={`pill ${pill}`}>{label}</span>

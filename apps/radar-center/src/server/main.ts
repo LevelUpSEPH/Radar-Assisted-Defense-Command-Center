@@ -8,7 +8,9 @@ import type { RadarState } from "../protocol";
 import { connectToCommandCenter, type RegisterPayload } from "./cc-link";
 import { loadConfig } from "./config";
 import { loadOrCreateIdentity } from "./identity";
+import { Tracker } from "./tracker";
 import { startUiServer, type UiServer } from "./ui-server";
+import { connectToWorld } from "./world-link";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
 
@@ -46,10 +48,27 @@ async function main() {
     onStatus: () => ui?.publish(),
   });
 
+  const tracker = new Tracker({ positionNoiseM: config.positionNoiseM });
+  const world = connectToWorld({
+    url: config.worldSimUrl,
+    radarId: config.name,
+    position: config.position,
+    rangeM: config.rangeM,
+    scanIntervalMs: config.scanIntervalMs,
+    onScan: (detections, observedAt) => {
+      tracker.update(detections, observedAt);
+      ui?.publish();
+    },
+    onStatus: () => ui?.publish(),
+  });
+
   const state = (): RadarState => ({
     name: config.name,
     position: config.position,
     rangeM: config.rangeM,
+    scanIntervalMs: config.scanIntervalMs,
+    worldConnected: world.connected(),
+    tracks: tracker.view(),
     deviceId,
     commandCenterUrl: config.commandCenterUrl,
     link: link.status(),
@@ -58,6 +77,7 @@ async function main() {
 
   const shutdown = async () => {
     link.close();
+    world.close();
     await ui?.close();
     process.exit(0);
   };

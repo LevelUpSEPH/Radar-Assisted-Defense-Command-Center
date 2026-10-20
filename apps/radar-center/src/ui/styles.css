@@ -457,3 +457,45 @@ code.fingerprint {
 .facts dd {
   margin: 0;
 }
+
+/* ---------------------------------------------------------------- tracks */
+
+.track.stale {
+  opacity: 0.55;
+}
+
+.track-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 4px 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.track-facts dt {
+  color: var(--muted);
+}
+
+.track-facts dd {
+  margin: 0;
+}
+
+.likelihood {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.likelihood .bar {
+  flex: 0 0 80px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.likelihood .fill {
+  height: 100%;
+  transition: width 0.3s;
+}

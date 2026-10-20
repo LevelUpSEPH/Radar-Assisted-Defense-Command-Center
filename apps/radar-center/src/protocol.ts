@@ -17,10 +17,28 @@ export type LinkStatus =
   | { state: "rejected"; reason: RejectReason; detail?: string }
   | { state: "revoked" };
 
+/** One object this radar sees: only what a radar can measure. */
+export interface RadarTrack {
+  radarTrackId: string;
+  position: LatLon;
+  altitudeM: number;
+  speedMps: number;
+  headingDeg: number;
+  /** 0..1 likelihood of being a drone (flying vehicle) rather than a bird or clutter. */
+  likelihood: number;
+  /** Recently measured positions, oldest first. */
+  trail: LatLon[];
+  observedAt: number;
+  missedScans: number;
+}
+
 export interface RadarState {
   name: string;
   position: LatLon;
   rangeM: number;
+  scanIntervalMs: number;
+  worldConnected: boolean;
+  tracks: RadarTrack[];
   /** Fingerprint of this radar's device key. */
   deviceId: string;
   commandCenterUrl: string;
