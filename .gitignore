@@ -2,5 +2,5 @@ node_modules/
 dist/
 coverage/
 *.log
-# Command Center runtime state (keys, registered units)
-apps/command-center/data/
+# Runtime state: Command Center keys and units, unit device identities (private keys!)
+apps/*/data/

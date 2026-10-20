@@ -1,6 +1,6 @@
 # Radar Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **planned** (milestone 4).
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 4 in progress**: piece 1 (registers with its device key, heartbeats, reconnects, status page) done. Next: scanning the World Simulator.
 
 A Radar Center is one radar site, and the **only** kind of program that connects to the World Simulator. It scans it for what is physically in range, turns raw detections into tracks with speed, heading and a likelihood of being a flying vehicle, and reports them to the Command Center. Its operator can mark tracks as friendly or enemy. Many Radar Centers run at once, one process each.
 
@@ -35,7 +35,9 @@ Not its job: deciding a track's classification (the Command Center does), or fus
 }
 ```
 
-Start: `npm run dev -w @tdts/radar-center -- --config scenario/radars/north.json`.
+Start: `npm run dev -w @tdts/radar-center -- --config scenario/radars/north.json [--key TDTS-…]`.
+
+The registration key can be in the config (`"key"`) or passed with `--key`; without one, the page says how to get one. The device identity (key pair) lives in `identityFile`, by default `apps/radar-center/data/identities/<config name>`, which is git-ignored because it holds the private key.
 
 ---
 
