@@ -21,7 +21,7 @@ import { loadConfig } from "./config";
 import { loadOrCreateIdentity } from "./identity";
 import { loadRegistrationKey, normalizeKey, saveRegistrationKey } from "./registration-store";
 import { startUiServer, type UiServer } from "./ui-server";
-import { Weapon, WeaponCommandError, type WeaponEvent } from "./weapon";
+import { Weapon, WeaponCommandError, type Ranges, type WeaponEvent } from "./weapon";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
 
@@ -56,8 +56,8 @@ async function main() {
           name: config.name,
           position: config.position,
           capabilities: {
-            minRangeM: config.minRangeM,
-            maxRangeM: config.maxRangeM,
+            // The ranges in use now, which the operator may have changed.
+            ...weapon.ranges(),
             ammo: config.ammo,
             prepareTimeS: config.prepareTimeS,
             reloadTimeS: config.reloadTimeS,
@@ -101,6 +101,12 @@ async function main() {
     }
   };
 
+  /** Both the operator here and the Command Center can change the ranges. */
+  const applyRanges = (ranges: Ranges, by: string) => {
+    weapon.setRanges(ranges);
+    console.log(`[weapon] ranges set to ${ranges.minRangeM}–${ranges.maxRangeM} m by ${by}`);
+  };
+
   /** Commands from the Command Center. One that doesn't fit the weapon's state is ignored. */
   const onCommand = (msg: FromCommandCenter) => {
     const now = Date.now();
@@ -120,9 +126,7 @@ async function main() {
           console.log(`[weapon] cancel ${msg.payload.engagementId}`);
           return step(() => weapon.cancel(msg.payload.engagementId));
         case "setRanges":
-          return console.log(
-            "[weapon] range changes from the Command Center come in a later piece",
-          );
+          return step(() => applyRanges(msg.payload, "the Command Center"));
         default:
           return;
       }
@@ -151,8 +155,7 @@ async function main() {
   const state = (): WeaponPageState => ({
     name: config.name,
     position: config.position,
-    minRangeM: config.minRangeM,
-    maxRangeM: config.maxRangeM,
+    ...weapon.ranges(),
     ammo: config.ammo,
     prepareTimeS: config.prepareTimeS,
     reloadTimeS: config.reloadTimeS,
@@ -178,6 +181,10 @@ async function main() {
         link.useRegistration(registration(key));
         break;
       }
+      case "setRanges":
+        // Refused ranges throw, and the page shows why.
+        step(() => applyRanges(msg.payload, "the operator"));
+        break;
     }
     ui?.publish();
   };

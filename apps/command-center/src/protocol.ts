@@ -212,5 +212,10 @@ export const UiToServerSchema = z.discriminatedUnion("type", [
     type: z.literal("classifyTrack"),
     payload: z.object({ trackId: z.string(), classification: IffSchema.nullable() }),
   }),
+  /** New min/max range for a weapon (meters). The weapon applies it and reports it back. */
+  z.object({
+    type: z.literal("setWeaponRanges"),
+    payload: z.object({ unitId: z.string(), minRangeM: z.number(), maxRangeM: z.number() }),
+  }),
 ]);
 export type UiToServer = z.infer<typeof UiToServerSchema>;

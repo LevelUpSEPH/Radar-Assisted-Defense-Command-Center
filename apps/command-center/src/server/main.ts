@@ -2,7 +2,12 @@
 //   npm run dev -w @tdts/command-center [-- --config path/to/command-center.json]
 
 import { resolve } from "node:path";
-import { PLANNING_INTERVAL_MS, type WeaponStatus } from "@tdts/shared";
+import {
+  createMessage,
+  PLANNING_INTERVAL_MS,
+  type FromCommandCenter,
+  type WeaponStatus,
+} from "@tdts/shared";
 import { parseArgs } from "node:util";
 import type { CommandState, UiToServer } from "../protocol";
 import { loadConfig } from "./config";
@@ -162,6 +167,20 @@ async function main() {
         execute(engagements.reject(msg.payload.engagementId, Date.now()));
         console.log(`[engage] operator rejected ${msg.payload.engagementId}`);
         break;
+      case "setWeaponRanges": {
+        const { unitId, minRangeM, maxRangeM } = msg.payload;
+        if (!(minRangeM >= 0 && minRangeM < maxRangeM)) {
+          throw new Error("Min range must be at least 0 and below max range.");
+        }
+        const sent = units.sendTo(
+          unitId,
+          createMessage<FromCommandCenter, "setRanges">("setRanges", { minRangeM, maxRangeM }),
+        );
+        if (!sent) throw new Error(`${unitId} is not online.`);
+        // The new ranges show once the weapon reports them in its status.
+        console.log(`[units] → ${unitId} setRanges ${minRangeM}–${maxRangeM} m`);
+        break;
+      }
       case "classifyTrack": {
         const { trackId, classification } = msg.payload;
         if (!fusion.setOverride(trackId, classification)) {

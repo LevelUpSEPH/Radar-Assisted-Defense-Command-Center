@@ -44,6 +44,11 @@ interface Engagement {
   solution: InterceptSolution | null;
 }
 
+export interface Ranges {
+  minRangeM: number;
+  maxRangeM: number;
+}
+
 /** A command the weapon can't follow right now; the caller logs it. */
 export class WeaponCommandError extends Error {}
 
@@ -55,9 +60,12 @@ export class Weapon {
   private until: number | null = null;
   /** The last shot, for the operator's page. */
   private lastShot: PayloadOf<ToCommandCenter, "shotFired"> | null = null;
+  /** Starts from the config; the operator can change it (`setRanges`). */
+  private current: Ranges;
 
   constructor(private readonly spec: WeaponSpec) {
     this.ammo = spec.ammo;
+    this.current = { minRangeM: spec.minRangeM, maxRangeM: spec.maxRangeM };
     this.state = spec.ammo > 0 ? "IDLE" : "EMPTY";
   }
 
@@ -102,6 +110,17 @@ export class Weapon {
     this.until = null;
   }
 
+  /**
+   * New min/max range, from the weapon's page or the Command Center. An
+   * engagement in progress keeps going; its next solution uses the new ranges.
+   */
+  setRanges({ minRangeM, maxRangeM }: Ranges): void {
+    if (!(minRangeM >= 0 && minRangeM < maxRangeM)) {
+      throw new WeaponCommandError("min range must be at least 0 and below max range");
+    }
+    this.current = { minRangeM, maxRangeM };
+  }
+
   // ------------------------------------------------------------- time
 
   /** Advances timers; fires when the solution's fire time has come. */
@@ -130,12 +149,16 @@ export class Weapon {
 
   // ------------------------------------------------------------- read model
 
+  ranges(): Ranges {
+    return { ...this.current };
+  }
+
   status(): WeaponStatus {
     return {
       state: this.state,
       ammo: this.ammo,
-      minRangeM: this.spec.minRangeM,
-      maxRangeM: this.spec.maxRangeM,
+      minRangeM: this.current.minRangeM,
+      maxRangeM: this.current.maxRangeM,
       engagementId: this.engagement?.id ?? null,
       stateUntil: this.until,
     };
@@ -163,7 +186,7 @@ export class Weapon {
   private aim(now: number): WeaponEvent[] {
     const e = this.engagement!;
     e.solution = findEarliestIntercept(
-      this.spec,
+      { ...this.spec, ...this.current },
       {
         position: e.track.position,
         speedMps: e.track.speedMps,

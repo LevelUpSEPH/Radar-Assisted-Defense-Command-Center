@@ -671,3 +671,18 @@ button.approve:hover:not(:disabled) {
   border-top: 1px solid var(--border);
   color: #c4b5fd;
 }
+
+/* ---------------------------------------------------------------- range editor */
+
+.range-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.range-form .key-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

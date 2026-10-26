@@ -148,6 +148,28 @@ describe("Weapon", () => {
     }
   });
 
+  it("takes new ranges, reports them and aims with them", () => {
+    const fireAt8s = (w: Weapon) => {
+      w.prepare("E-1", inbound(), T0);
+      w.tick(T0 + 8_000);
+      return w.fire("E-1", T0 + 8_000).map((e) => e.type);
+    };
+    // 15 km reach: the drone 24 km out isn't reachable yet; the weapon waits.
+    expect(fireAt8s(new Weapon(spec))).toEqual([]);
+    // 20 km reach: the shell can meet it about 18 km out, so it shoots at once.
+    const longer = new Weapon(spec);
+    longer.setRanges({ minRangeM: 1_000, maxRangeM: 20_000 });
+    expect(longer.status()).toMatchObject({ minRangeM: 1_000, maxRangeM: 20_000 });
+    expect(fireAt8s(longer)).toEqual(["shotFired"]);
+  });
+
+  it("refuses ranges where min isn't below max", () => {
+    const w = new Weapon(spec);
+    expect(() => w.setRanges({ minRangeM: 5_000, maxRangeM: 5_000 })).toThrow(WeaponCommandError);
+    expect(() => w.setRanges({ minRangeM: -1, maxRangeM: 5_000 })).toThrow(WeaponCommandError);
+    expect(w.status()).toMatchObject({ minRangeM: 2_000, maxRangeM: 15_000 });
+  });
+
   it("refuses commands that don't fit its state or engagement", () => {
     const w = new Weapon(spec);
     expect(() => w.fire("E-1", T0)).toThrow(WeaponCommandError);

@@ -1,7 +1,17 @@
 import type { WeaponState } from "@tdts/shared";
+import { useState } from "react";
 import type { UiToServer, UnitView } from "../protocol";
+import { RangeForm } from "./RangeForm";
 
 const km = (m: number) => `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} km`;
+
+type WeaponUnit = Extract<UnitView, { unitType: "weapon" }>;
+
+/** A weapon's ranges in use: as last reported, else as registered. */
+export function liveRanges(u: WeaponUnit): { minRangeM: number; maxRangeM: number } {
+  const s = u.weaponStatus ?? u.capabilities;
+  return { minRangeM: s.minRangeM, maxRangeM: s.maxRangeM };
+}
 
 export function UnitsPanel({
   units,
@@ -35,6 +45,9 @@ export function UnitsPanel({
                     {u.weaponStatus.ammo} rounds left
                     {u.weaponStatus.engagementId && ` · ${u.weaponStatus.engagementId}`}
                   </span>
+                )}
+                {u.unitType === "weapon" && u.unitId && u.status === "ONLINE" && (
+                  <RangeEditor unit={u} unitId={u.unitId} disabled={disabled} send={send} />
                 )}
                 {u.deviceId && (
                   <span className="muted small" title="Fingerprint of the unit's device key">
@@ -90,9 +103,45 @@ const WEAPON_PILL: Record<WeaponState, string> = {
   EMPTY: "pill-bad",
 };
 
+/** Change an online weapon's min/max range; the weapon applies it and reports it back. */
+function RangeEditor({
+  unit,
+  unitId,
+  disabled,
+  send,
+}: {
+  unit: WeaponUnit;
+  unitId: string;
+  disabled: boolean;
+  send(msg: UiToServer): void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const ranges = liveRanges(unit);
+  if (!editing) {
+    return (
+      <span className="small">
+        <button type="button" className="link" disabled={disabled} onClick={() => setEditing(true)}>
+          Change ranges
+        </button>
+      </span>
+    );
+  }
+  return (
+    <RangeForm
+      {...ranges}
+      disabled={disabled}
+      onSubmit={(r) => {
+        send({ type: "setWeaponRanges", payload: { unitId, ...r } });
+        setEditing(false);
+      }}
+      onCancel={() => setEditing(false)}
+    />
+  );
+}
+
 function describe(u: UnitView): string {
   const where = `${u.position.lat.toFixed(4)}, ${u.position.lon.toFixed(4)}`;
   if (u.unitType === "radar") return `radar · ${km(u.capabilities.rangeM)} range · ${where}`;
-  const c = u.capabilities;
-  return `weapon · ${km(c.minRangeM)}–${km(c.maxRangeM)} · ${c.ammo} rounds · ${where}`;
+  const r = liveRanges(u);
+  return `weapon · ${km(r.minRangeM)}–${km(r.maxRangeM)} · ${u.capabilities.ammo} rounds · ${where}`;
 }

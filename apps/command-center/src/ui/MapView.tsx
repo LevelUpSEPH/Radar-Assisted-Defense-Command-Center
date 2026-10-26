@@ -28,6 +28,7 @@ import type {
 } from "../protocol";
 import { engagementText, useNow } from "./EngagementsPanel";
 import { IFF_ORDER, IFF_STYLE } from "./track-style";
+import { liveRanges } from "./UnitsPanel";
 
 // Areas, trails and lines are drawn with `interactive: false`: clicks and hovers
 // pass through them, so only points (tracks, units) can be picked.
@@ -37,6 +38,7 @@ const OFFLINE_COLOR = "#64748b";
 /** How far ahead the dashed trajectory line reaches. */
 const PROJECT_S = 60;
 
+const km = (m: number) => `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} km`;
 const toLatLng = (p: LatLon): [number, number] => [p.lat, p.lon];
 
 export function MapView({
@@ -89,6 +91,7 @@ function UnitMarker({ unit }: { unit: UnitView }) {
   const online = unit.status === "ONLINE";
   const color = !online ? OFFLINE_COLOR : unit.unitType === "radar" ? RADAR_COLOR : WEAPON_COLOR;
   const center = toLatLng(unit.position);
+  const ranges = unit.unitType === "weapon" ? liveRanges(unit) : null;
   const ring = {
     color,
     weight: 1,
@@ -99,10 +102,16 @@ function UnitMarker({ unit }: { unit: UnitView }) {
   const label = (
     <Tooltip>
       <strong>{unit.unitId}</strong> · {unit.name} · {unit.status.toLowerCase()}
-      {unit.unitType === "weapon" && unit.weaponStatus && (
+      {unit.unitType === "weapon" && ranges && (
         <>
           <br />
-          {unit.weaponStatus.state.toLowerCase()} · {unit.weaponStatus.ammo} rounds
+          can hit {km(ranges.minRangeM)}–{km(ranges.maxRangeM)}
+          {unit.weaponStatus && (
+            <>
+              <br />
+              {unit.weaponStatus.state.toLowerCase()} · {unit.weaponStatus.ammo} rounds
+            </>
+          )}
         </>
       )}
     </Tooltip>
@@ -110,15 +119,23 @@ function UnitMarker({ unit }: { unit: UnitView }) {
 
   return (
     <>
-      {unit.unitType === "radar" ? (
+      {unit.unitType === "radar" && (
         <Circle center={center} radius={unit.capabilities.rangeM} pathOptions={ring} />
-      ) : (
+      )}
+      {ranges && (
         <>
-          <Circle center={center} radius={unit.capabilities.maxRangeM} pathOptions={ring} />
+          <Circle center={center} radius={ranges.maxRangeM} pathOptions={ring} />
+          {/* Too close to hit: dashed and shaded, as on the weapon's own page. */}
           <Circle
             center={center}
-            radius={unit.capabilities.minRangeM}
-            pathOptions={{ ...ring, dashArray: "4 4", fillOpacity: 0 }}
+            radius={ranges.minRangeM}
+            pathOptions={{
+              ...ring,
+              opacity: online ? 0.9 : 0.4,
+              dashArray: "4 4",
+              fillColor: "#000",
+              fillOpacity: 0.3,
+            }}
           />
         </>
       )}
@@ -403,7 +420,7 @@ function FrameMap({ view, units }: { view: MapViewConfig | null; units: UnitView
       unitsFramed.current = true;
       const bounds = latLngBounds([]);
       for (const u of units) {
-        const reach = u.unitType === "radar" ? u.capabilities.rangeM : u.capabilities.maxRangeM;
+        const reach = u.unitType === "radar" ? u.capabilities.rangeM : liveRanges(u).maxRangeM;
         bounds.extend(latLng(u.position.lat, u.position.lon).toBounds(reach * 2));
       }
       map.fitBounds(bounds.pad(0.05));
@@ -436,6 +453,7 @@ function Legend() {
             {IFF_STYLE[iff].label}
           </div>
         ))}
+        <div className="legend-item muted">shaded around a weapon: too close</div>
         <div className="legend-item muted">- - - next {PROJECT_S} s</div>
       </div>
     </div>

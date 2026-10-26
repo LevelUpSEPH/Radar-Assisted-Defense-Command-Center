@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react";
 import type { LinkStatus, UiToServer } from "../protocol";
 import type { WeaponSocket } from "./useWeaponSocket";
+import { RangeForm } from "./RangeForm";
 import { WeaponPanel } from "./WeaponPanel";
 
 const km = (m: number) => `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} km`;
 
 export function Sidebar({ weapon }: { weapon: WeaponSocket }) {
   const { connected, state, error, clearError, send } = weapon;
+  const [editingRanges, setEditingRanges] = useState(false);
 
   return (
     <aside className="sidebar">
@@ -57,6 +59,28 @@ export function Sidebar({ weapon }: { weapon: WeaponSocket }) {
               <dt>Range</dt>
               <dd>
                 {km(state.minRangeM)} – {km(state.maxRangeM)}
+                {!editingRanges && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <button type="button" className="link" onClick={() => setEditingRanges(true)}>
+                      Change
+                    </button>
+                  </>
+                )}
+                {editingRanges && (
+                  <RangeForm
+                    minRangeM={state.minRangeM}
+                    maxRangeM={state.maxRangeM}
+                    disabled={!connected}
+                    onSubmit={(ranges) => {
+                      clearError();
+                      send({ type: "setRanges", payload: ranges });
+                      setEditingRanges(false);
+                    }}
+                    onCancel={() => setEditingRanges(false)}
+                  />
+                )}
               </dd>
               <dt>Magazine</dt>
               <dd>{state.ammo} rounds</dd>

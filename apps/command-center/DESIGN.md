@@ -191,7 +191,7 @@ The weapon reports the shot, the Command Center tells the radar, the radar repor
 - **Units panel:** online/offline/pending, approve/reject pending units.
 - **Tracks panel (done):** system tracks, engageable enemies first: classification and who decided it, engageability, altitude/speed/heading, likelihood, which radars see it (with each radar's report), override controls.
 - **Engagements panel (done):** fire-mode switch; active engagements with state, weapon, target, countdowns, Approve / Reject / Call off; recent ones folded away.
-- **Weapon panel:** edit a weapon's ranges (`setRanges`).
+- **Weapon ranges (done):** **Change ranges** on an online weapon in the Units tab sends `setRanges`. The list, the map rings and the planner use the ranges the weapon last reported in its `status`. On the map, the inside of the min range ring is shaded: too close to hit.
 
 ---
 

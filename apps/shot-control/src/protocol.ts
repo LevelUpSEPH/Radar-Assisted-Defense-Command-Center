@@ -21,6 +21,7 @@ export type LinkStatus =
 export interface WeaponPageState {
   name: string;
   position: LatLon;
+  /** The ranges in use now (the config's, unless changed since). */
   minRangeM: number;
   maxRangeM: number;
   ammo: number;
@@ -53,5 +54,10 @@ export type ServerToUi =
 export const UiToServerSchema = z.discriminatedUnion("type", [
   /** The operator entered a registration key from the Command Center. */
   z.object({ type: z.literal("setKey"), payload: z.object({ key: z.string() }) }),
+  /** The operator changed the weapon's min/max range (meters). */
+  z.object({
+    type: z.literal("setRanges"),
+    payload: z.object({ minRangeM: z.number(), maxRangeM: z.number() }),
+  }),
 ]);
 export type UiToServer = z.infer<typeof UiToServerSchema>;
