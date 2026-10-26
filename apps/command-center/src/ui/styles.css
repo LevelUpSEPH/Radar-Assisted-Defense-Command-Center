@@ -563,3 +563,111 @@ code.fingerprint {
   color: var(--muted);
   border: 1px solid var(--border);
 }
+
+/* ---------------------------------------------------------------- engagements */
+
+.fire-mode {
+  margin-bottom: 8px;
+}
+
+.row.awaiting {
+  border-color: #b45309;
+  background: color-mix(in srgb, #b45309 12%, var(--panel-2));
+}
+
+button.approve {
+  background: #166534;
+  border-color: #15803d;
+}
+
+button.approve:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.call-off {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.engaged-by {
+  color: #c4b5fd;
+}
+
+.history summary {
+  cursor: pointer;
+  margin: 4px 0 6px;
+}
+
+/* ---------------------------------------------------------------- map popups */
+
+.track-popup .leaflet-popup-content-wrapper,
+.track-popup .leaflet-popup-tip {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.track-popup .leaflet-popup-content {
+  margin: 10px 12px;
+  min-width: 210px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.track-popup a.leaflet-popup-close-button {
+  color: var(--muted);
+}
+
+.popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.popup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.popup-actions button.small,
+.popup-engagement button.small {
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+.popup-actions button {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+.popup-actions button.on-enemy {
+  background: color-mix(in srgb, #ef4444 25%, transparent);
+  border-color: #ef4444;
+}
+
+.popup-actions button.on-friendly {
+  background: color-mix(in srgb, #60a5fa 25%, transparent);
+  border-color: #60a5fa;
+}
+
+.popup-actions button.on-unknown {
+  background: color-mix(in srgb, #facc15 20%, transparent);
+  border-color: #facc15;
+}
+
+.popup-engagement {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: #c4b5fd;
+}

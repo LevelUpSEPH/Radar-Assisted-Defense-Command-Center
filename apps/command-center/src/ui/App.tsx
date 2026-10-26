@@ -12,6 +12,9 @@ export function App() {
           view={cc.state?.view ?? null}
           units={cc.state?.units ?? []}
           tracks={cc.state?.tracks ?? []}
+          engagements={cc.state?.engagements ?? []}
+          disabled={!cc.connected}
+          send={cc.send}
         />
       </main>
     </div>

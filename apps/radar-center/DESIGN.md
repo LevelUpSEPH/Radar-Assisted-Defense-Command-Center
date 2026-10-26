@@ -1,6 +1,6 @@
 # Radar Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 4 in progress**: piece 1 (registers with its device key, heartbeats, reconnects, status page) piece 2 (scans the World Simulator; tracks with altitude, trajectory, speed and drone likelihood on its page), key entry on the page, piece 3 (reports its tracks to the Command Center after every sweep) and piece 4 (friend/enemy marking) done. Next: kill confirmation, with the weapons.
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 4 in progress**: piece 1 (registers with its device key, heartbeats, reconnects, status page) piece 2 (scans the World Simulator; tracks with altitude, trajectory, speed and drone likelihood on its page), key entry on the page, piece 3 (reports its tracks to the Command Center after every sweep) piece 4 (friend/enemy marking) and piece 5 (kill confirmation) done.
 
 A Radar Center is one radar site, and the **only** kind of program that connects to the World Simulator. It scans it for what is physically in range, turns raw detections into tracks with speed, heading and a likelihood of being a flying vehicle, and reports them to the Command Center. Its operator can mark tracks as friendly or enemy. Many Radar Centers run at once, one process each.
 
@@ -89,7 +89,7 @@ If the track is unknown (already dropped), it answers `destroyed: true` without 
 - **Status:** Command Center registration, and the **radar hardware** (the World Simulator connection, presented as the radar's own hardware: "Antenna sweeping every 1.0 s" or "No signal"). The radar's page and logs never mention a simulation; it should look and behave like a real radar.
 - **Map:** radar position and range circle; each track as a dot colored by friend/enemy status (friend blue, enemy red, unknown yellow, the usual map convention), its measured positions as a faint trail, and a dashed line showing where it will be in 60 s.
 - **Tracks list:** only what a radar can measure: id, altitude, speed, heading (degrees and compass point) and drone likelihood (bar, percentage, band). Tracks missing from recent scans are dimmed.
-- **IFF, per track:** what the radar reports (Friend / Enemy / Unknown) and why ("marked by operator", "answered IFF", "no IFF reply"), with **Friend** and **Enemy** buttons and **Clear** once marked.
+- **IFF, per track** (in the list, and in a popup when a track is clicked on the map): what the radar reports (Friend / Enemy / Unknown) and why ("marked by operator", "answered IFF", "no IFF reply"), with **Friend** and **Enemy** buttons and **Clear** once marked.
 
 The marking is a **report** to the Command Center, not a decision: it is sent in the `iff` field of the track's next `tracks` report (within one sweep), and the Command Center shows it as "Reported friend" / "Reported enemy". The Command Center decides the classification (see its design, §5).
 

@@ -8,7 +8,7 @@ export function App() {
     <div className="layout">
       <Sidebar radar={radar} />
       <main className="map-area">
-        <MapView state={radar.state} />
+        <MapView state={radar.state} disabled={!radar.connected} send={radar.send} />
       </main>
     </div>
   );

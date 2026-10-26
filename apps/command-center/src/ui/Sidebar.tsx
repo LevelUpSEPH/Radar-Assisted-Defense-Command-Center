@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { KeysPanel } from "./KeysPanel";
+import { EngagementsPanel } from "./EngagementsPanel";
 import { TracksPanel } from "./TracksPanel";
 import { UnitsPanel } from "./UnitsPanel";
 import type { CommandSocket } from "./useCommandSocket";
@@ -34,14 +35,20 @@ export function Sidebar({ cc }: { cc: CommandSocket }) {
   const tracks = state?.tracks ?? [];
   const units = state?.units ?? [];
   const keys = state?.keys ?? [];
+  const engagements = state?.engagements ?? [];
+  const awaiting = engagements.filter((e) => e.state === "AWAITING_APPROVAL").length;
 
   // What each tab has that needs attention.
   const badges: Record<Tab, { count: number; tone: string; title: string }> = {
-    tracks: {
-      count: tracks.filter((t) => t.engageable).length,
-      tone: "badge-enemy",
-      title: "engageable enemies",
-    },
+    // Shots waiting for the operator come first; otherwise engageable enemies.
+    tracks:
+      awaiting > 0
+        ? { count: awaiting, tone: "badge-warn", title: "shots waiting for approval" }
+        : {
+            count: tracks.filter((t) => t.engageable).length,
+            tone: "badge-enemy",
+            title: "engageable enemies",
+          },
     units: {
       count: units.filter((u) => u.status === "PENDING").length,
       tone: "badge-warn",
@@ -102,12 +109,21 @@ export function Sidebar({ cc }: { cc: CommandSocket }) {
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === "tracks" && (
-          <TracksPanel
-            tracks={tracks}
-            minLikelihoodToEngage={state?.minLikelihoodToEngage ?? 0.6}
-            disabled={!connected}
-            send={send}
-          />
+          <>
+            <EngagementsPanel
+              engagements={engagements}
+              fireMode={state?.fireMode ?? "approval"}
+              disabled={!connected}
+              send={send}
+            />
+            <TracksPanel
+              tracks={tracks}
+              engagements={engagements}
+              minLikelihoodToEngage={state?.minLikelihoodToEngage ?? 0.6}
+              disabled={!connected}
+              send={send}
+            />
+          </>
         )}
         {tab === "units" && <UnitsPanel units={units} disabled={!connected} send={send} />}
         {tab === "keys" && <KeysPanel keys={keys} disabled={!connected} send={send} />}

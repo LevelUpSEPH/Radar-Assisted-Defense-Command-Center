@@ -6,12 +6,19 @@
 
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { deviceFingerprint, isValidKeyFormat } from "@tdts/shared";
+import {
+  createMessage,
+  deviceFingerprint,
+  isValidKeyFormat,
+  type ToCommandCenter,
+  type ToWorldSim,
+} from "@tdts/shared";
 import type { RadarState, UiToServer } from "../protocol";
 import { connectToCommandCenter, type RegisterPayload } from "./cc-link";
 import { loadConfig } from "./config";
 import { loadOrCreateIdentity } from "./identity";
 import { loadRegistrationKey, normalizeKey, saveRegistrationKey } from "./registration-store";
+import { KillChecks, type KillCheckReply } from "./kill-checks";
 import { iffReport, tracksMessage } from "./report";
 import { Tracker } from "./tracker";
 import { startUiServer, type UiServer } from "./ui-server";
@@ -54,14 +61,32 @@ async function main() {
       : null;
 
   let ui: UiServer | null = null;
+  const tracker = new Tracker({ positionNoiseM: config.positionNoiseM });
+  const killChecks = new KillChecks();
+  const sendKillReport = (r: KillCheckReply) => {
+    console.log(`[radar] kill check ${r.checkId}: ${r.destroyed ? "destroyed" : "still there"}`);
+    link.send(createMessage<ToCommandCenter, "killReport">("killReport", r));
+  };
+
   const link = connectToCommandCenter({
     url: config.commandCenterUrl,
     register: registration(key),
     device,
     onStatus: () => ui?.publish(),
+    onMessage: (msg) => {
+      if (msg.type !== "confirmKill") return;
+      // A weapon's shot reached the object behind this track: tell the hardware
+      // it was hit, and answer after the next sweep.
+      const { checkId, radarTrackId } = msg.payload;
+      const { targetHit, immediate } = killChecks.start(checkId, tracker.truthIdOf(radarTrackId));
+      if (targetHit) {
+        world.send(createMessage<ToWorldSim, "targetHit">("targetHit", { truthId: targetHit }));
+        console.log(`[radar] ${radarTrackId} was hit (${checkId})`);
+      }
+      if (immediate) sendKillReport(immediate);
+    },
   });
 
-  const tracker = new Tracker({ positionNoiseM: config.positionNoiseM });
   const world = connectToWorld({
     url: config.worldSimUrl,
     radarId: config.name,
@@ -70,6 +95,9 @@ async function main() {
     scanIntervalMs: config.scanIntervalMs,
     onScan: (detections, observedAt) => {
       tracker.update(detections, observedAt);
+      for (const r of killChecks.afterSweep(new Set(detections.map((d) => d.truthId)))) {
+        sendKillReport(r);
+      }
       // Once registered, every sweep goes to the Command Center.
       if (link.unitId()) link.send(tracksMessage(observedAt, tracker.view()));
       ui?.publish();

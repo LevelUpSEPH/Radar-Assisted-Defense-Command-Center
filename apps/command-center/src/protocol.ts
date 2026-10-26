@@ -128,6 +128,48 @@ export const SystemTrackViewSchema = z.object({
 });
 export type SystemTrackView = z.infer<typeof SystemTrackViewSchema>;
 
+// ---------------------------------------------------------------- engagements (DESIGN.md §7–9)
+
+export const FireModeSchema = z.enum(["auto", "approval"]);
+export type FireMode = z.infer<typeof FireModeSchema>;
+
+export const EngagementStateSchema = z.enum([
+  /** The weapon is getting ready. */
+  "PREPARING",
+  /** Ready; in approval mode waiting for the operator. */
+  "AWAITING_APPROVAL",
+  /** Told to fire; the weapon waits for its fire time. */
+  "FIRING",
+  /** Shot fired; the shell is on its way. */
+  "IN_FLIGHT",
+  /** The shell arrived; asking the radars whether the target is gone. */
+  "CONFIRMING",
+  "KILL",
+  /** No radar could confirm in time. */
+  "UNCONFIRMED",
+  "CANCELLED",
+]);
+export type EngagementState = z.infer<typeof EngagementStateSchema>;
+
+export const EngagementViewSchema = z.object({
+  /** "E-0001", … */
+  engagementId: z.string(),
+  trackId: z.string(),
+  weaponUnitId: z.string(),
+  state: EngagementStateSchema,
+  createdAt: z.number(),
+  /** When the current state began. */
+  since: z.number(),
+  /** PREPARING: when the weapon expects to be ready. */
+  readyAt: z.number().nullable(),
+  shot: z
+    .object({ firedAt: z.number(), impactAt: z.number(), impactPoint: LatLonSchema })
+    .nullable(),
+  /** CANCELLED / UNCONFIRMED: why. */
+  reason: z.string().nullable(),
+});
+export type EngagementView = z.infer<typeof EngagementViewSchema>;
+
 // ---------------------------------------------------------------- messages
 
 export const CommandStateSchema = z.object({
@@ -138,6 +180,9 @@ export const CommandStateSchema = z.object({
   tracks: z.array(SystemTrackViewSchema),
   /** Enemy tracks at or above this drone likelihood are engageable. */
   minLikelihoodToEngage: z.number(),
+  fireMode: FireModeSchema,
+  /** Active engagements, then the most recent finished ones. */
+  engagements: z.array(EngagementViewSchema),
 });
 export type CommandState = z.infer<typeof CommandStateSchema>;
 
@@ -153,6 +198,15 @@ export const UiToServerSchema = z.discriminatedUnion("type", [
   /** Pending units are identified by their key (they have no unit id yet). */
   z.object({ type: z.literal("approveUnit"), payload: z.object({ key: z.string() }) }),
   z.object({ type: z.literal("rejectUnit"), payload: z.object({ key: z.string() }) }),
+  z.object({ type: z.literal("setFireMode"), payload: z.object({ fireMode: FireModeSchema }) }),
+  z.object({
+    type: z.literal("approveEngagement"),
+    payload: z.object({ engagementId: z.string() }),
+  }),
+  z.object({
+    type: z.literal("rejectEngagement"),
+    payload: z.object({ engagementId: z.string() }),
+  }),
   /** The operator overrides a track's classification; null hands it back to the radars. */
   z.object({
     type: z.literal("classifyTrack"),

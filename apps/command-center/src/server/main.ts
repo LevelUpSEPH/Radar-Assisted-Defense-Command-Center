@@ -8,6 +8,7 @@ import type { CommandState, UiToServer } from "../protocol";
 import { loadConfig } from "./config";
 import { loadDataFile, saveDataFile } from "./data-file";
 import { AirPicture } from "./air-picture";
+import { Engagements, type Command, type WeaponInfo } from "./engagements";
 import { Fusion } from "./fusion";
 import { KeyStore } from "./keys";
 import { Registry } from "./registry";
@@ -43,6 +44,34 @@ async function main() {
   // The latest status of every online weapon.
   const weaponStatus = new Map<string, WeaponStatus>();
 
+  // Engagements: which weapon takes which target, until the kill is confirmed.
+  const engagements = new Engagements(config.fireMode);
+  const execute = (commands: Command[]) => {
+    for (const c of commands) {
+      if (c.msg.type !== "trackUpdate")
+        console.log(
+          `[engage] → ${c.to} ${c.msg.type} ${JSON.stringify(c.msg.payload).slice(0, 80)}`,
+        );
+      units.sendTo(c.to, c.msg);
+    }
+  };
+  /** Online weapons with what the planner needs: where, how fast, and their live status. */
+  const onlineWeapons = (): WeaponInfo[] =>
+    registry.records().flatMap((u) => {
+      const status = weaponStatus.get(u.unitId);
+      return u.unitType === "weapon" && status
+        ? [
+            {
+              unitId: u.unitId,
+              position: u.position,
+              prepareTimeS: u.capabilities.prepareTimeS,
+              shellSpeedMps: u.capabilities.shellSpeedMps,
+              status,
+            },
+          ]
+        : [];
+    });
+
   const state = (): CommandState => ({
     view: config.view,
     keys: keys.list(),
@@ -52,6 +81,8 @@ async function main() {
     }),
     tracks: fusion.view(),
     minLikelihoodToEngage: config.minLikelihoodToEngage,
+    fireMode: engagements.fireMode,
+    engagements: engagements.view(),
   });
 
   let ui: UiServer | null = null;
@@ -66,10 +97,29 @@ async function main() {
     },
     onWeaponStatus: (unitId, status) => {
       weaponStatus.set(unitId, status);
+      execute(engagements.onWeaponStatus(unitId, status, Date.now()));
+      ui?.publish();
+    },
+    onShotFired: (unitId, shot) => {
+      console.log(`[engage] ${unitId} fired ${shot.engagementId}`);
+      engagements.onShotFired(unitId, shot, Date.now());
+      ui?.publish();
+    },
+    onFireFailed: (unitId, report) => {
+      console.log(`[engage] ${unitId} can't fire ${report.engagementId}: ${report.reason}`);
+      execute(engagements.onFireFailed(unitId, report.engagementId, report.reason, Date.now()));
+      ui?.publish();
+    },
+    onKillReport: (unitId, report) => {
+      console.log(
+        `[engage] ${unitId} kill report ${report.checkId}: ${report.destroyed ? "destroyed" : "still there"}`,
+      );
+      engagements.onKillReport(unitId, report.checkId, report.destroyed, Date.now());
       ui?.publish();
     },
     onUnitGone: (unitId) => {
       weaponStatus.delete(unitId);
+      engagements.weaponGone(unitId, Date.now());
       picture.forget(unitId);
       refreshTracks();
     },
@@ -89,6 +139,7 @@ async function main() {
         if (!keys.delete(msg.payload.key)) throw new Error(`unknown key ${msg.payload.key}`);
         if (unitId) {
           weaponStatus.delete(unitId);
+          engagements.weaponGone(unitId, Date.now());
           picture.forget(unitId);
           refreshTracks();
         }
@@ -99,6 +150,18 @@ async function main() {
         console.log(`[keys] deleted ${msg.payload.key}`);
         break;
       }
+      case "setFireMode":
+        engagements.fireMode = msg.payload.fireMode;
+        console.log(`[engage] fire mode: ${msg.payload.fireMode}`);
+        break;
+      case "approveEngagement":
+        execute(engagements.approve(msg.payload.engagementId, Date.now()));
+        console.log(`[engage] operator approved ${msg.payload.engagementId}`);
+        break;
+      case "rejectEngagement":
+        execute(engagements.reject(msg.payload.engagementId, Date.now()));
+        console.log(`[engage] operator rejected ${msg.payload.engagementId}`);
+        break;
       case "classifyTrack": {
         const { trackId, classification } = msg.payload;
         if (!fusion.setOverride(trackId, classification)) {
@@ -128,6 +191,7 @@ async function main() {
   // nothing else happens.
   const tick = setInterval(() => {
     refreshTracks();
+    execute(engagements.plan(Date.now(), fusion.view(), onlineWeapons()));
     ui?.publish();
   }, PLANNING_INTERVAL_MS);
 

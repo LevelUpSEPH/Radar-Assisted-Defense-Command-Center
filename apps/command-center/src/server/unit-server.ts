@@ -16,6 +16,8 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { Registry, RegisterResult } from "./registry";
 
 export interface UnitServer {
+  /** Sends a message to a registered unit; false if it isn't online. */
+  sendTo(unitId: string, msg: FromCommandCenter): boolean;
   /** Tells a pending unit it was approved. */
   confirmRegistered(connId: string, unitId: string): void;
   /** Tells the unit why and closes its connection (e.g. its key was deleted). */
@@ -28,6 +30,12 @@ export interface UnitServerEvents {
   onRegister(result: RegisterResult): void;
   /** A registered radar reported a sweep. */
   onTracks(unitId: string, report: PayloadOf<ToCommandCenter, "tracks">): void;
+  /** A registered weapon fired. */
+  onShotFired(unitId: string, shot: PayloadOf<ToCommandCenter, "shotFired">): void;
+  /** A registered weapon couldn't fire. */
+  onFireFailed(unitId: string, report: PayloadOf<ToCommandCenter, "fireFailed">): void;
+  /** A registered radar answered a kill check. */
+  onKillReport(unitId: string, report: PayloadOf<ToCommandCenter, "killReport">): void;
   /** A registered weapon reported its status. */
   onWeaponStatus(unitId: string, status: PayloadOf<ToCommandCenter, "status">): void;
   /** A registered unit's connection ended (disconnect, timeout, revoke). */
@@ -120,14 +128,17 @@ export function startUnitServer(
             return sendError(ws, "WRONG_UNIT_TYPE", `only weapons send ${msg.type}`);
           }
           if (msg.type === "status") return events.onWeaponStatus(unitId, msg.payload);
-          // Shots and failures drive engagements, which come in the next piece.
-          return console.log(`[units] ${unitId} ${msg.type}: ${JSON.stringify(msg.payload)}`);
+          if (msg.type === "shotFired") return events.onShotFired(unitId, msg.payload);
+          return events.onFireFailed(unitId, msg.payload);
         }
-        default:
-          // Kill reports etc. are handled in later pieces; for now only check
-          // that the sender is a registered unit.
-          if (!registry.unitOn(connId))
-            sendError(ws, "NOT_REGISTERED", `register before ${msg.type}`);
+        case "killReport": {
+          const unitId = registry.unitOn(connId);
+          if (!unitId) return sendError(ws, "NOT_REGISTERED", "register before killReport");
+          if (registry.unitTypeOf(unitId) !== "radar") {
+            return sendError(ws, "WRONG_UNIT_TYPE", "only radars confirm kills");
+          }
+          return events.onKillReport(unitId, msg.payload);
+        }
       }
     });
 
@@ -183,6 +194,13 @@ export function startUnitServer(
     confirmRegistered: (connId, unitId) => {
       const ws = sockets.get(connId);
       if (ws) answerRegistration(ws, { kind: "registered", unitId });
+    },
+    sendTo: (unitId, msg) => {
+      const connId = registry.connectionOfUnit(unitId);
+      const ws = connId ? sockets.get(connId) : undefined;
+      if (!ws || ws.readyState !== ws.OPEN) return false;
+      send(ws, msg);
+      return true;
     },
     disconnect: (connId, why) => {
       const ws = sockets.get(connId);

@@ -1,4 +1,4 @@
-import { extrapolate, type LatLon } from "@tdts/shared";
+import { extrapolate, type Iff, type LatLon } from "@tdts/shared";
 import { latLng } from "leaflet";
 import { useEffect, useRef } from "react";
 import {
@@ -7,10 +7,11 @@ import {
   MapContainer,
   Polyline,
   TileLayer,
+  Popup,
   Tooltip,
   useMap,
 } from "react-leaflet";
-import type { RadarState, RadarTrack } from "../protocol";
+import type { RadarState, RadarTrack, UiToServer } from "../protocol";
 import { IFF_ORDER, IFF_STYLE } from "./track-style";
 
 // Areas, trails and lines are drawn with `interactive: false`: clicks and hovers
@@ -21,7 +22,15 @@ const PROJECT_S = 60;
 
 const toLatLng = (p: LatLon): [number, number] => [p.lat, p.lon];
 
-export function MapView({ state }: { state: RadarState | null }) {
+export function MapView({
+  state,
+  disabled,
+  send,
+}: {
+  state: RadarState | null;
+  disabled: boolean;
+  send(msg: UiToServer): void;
+}) {
   return (
     <MapContainer center={[47, 8]} zoom={8} className="map" preferCanvas>
       <TileLayer
@@ -56,7 +65,7 @@ export function MapView({ state }: { state: RadarState | null }) {
             <Tooltip>{state.name}</Tooltip>
           </CircleMarker>
           {state.tracks.map((t) => (
-            <TrackMarker key={t.radarTrackId} track={t} />
+            <TrackMarker key={t.radarTrackId} track={t} disabled={disabled} send={send} />
           ))}
         </>
       )}
@@ -65,7 +74,15 @@ export function MapView({ state }: { state: RadarState | null }) {
   );
 }
 
-function TrackMarker({ track: t }: { track: RadarTrack }) {
+function TrackMarker({
+  track: t,
+  disabled,
+  send,
+}: {
+  track: RadarTrack;
+  disabled: boolean;
+  send(msg: UiToServer): void;
+}) {
   const { color, label } = IFF_STYLE[t.iff];
   const opacity = t.missedScans > 0 ? 0.4 : 1;
   const moving = t.trail.length >= 2 && t.speedMps > 0;
@@ -114,8 +131,73 @@ function TrackMarker({ track: t }: { track: RadarTrack }) {
           <br />
           {label} · drone likelihood {Math.round(t.likelihood * 100)}%
         </Tooltip>
+        <Popup className="track-popup" autoPanPadding={[16, 16]}>
+          <MarkActions track={t} disabled={disabled} send={send} />
+        </Popup>
       </CircleMarker>
     </>
+  );
+}
+
+/** Friend / enemy marking, right on the map (opens on click). */
+function MarkActions({
+  track: t,
+  disabled,
+  send,
+}: {
+  track: RadarTrack;
+  disabled: boolean;
+  send(msg: UiToServer): void;
+}) {
+  const style = IFF_STYLE[t.iff];
+  const mark = (marking: Iff | null) =>
+    send({ type: "markTrack", payload: { radarTrackId: t.radarTrackId, marking } });
+  const why = t.marking ? "marked by operator" : t.answersIff ? "answered IFF" : "no IFF reply";
+
+  return (
+    <div className="popup-body">
+      <div className="popup-head">
+        <strong>{t.radarTrackId}</strong>
+        <span className="pill" style={{ color: style.color, borderColor: style.color }}>
+          {style.label}
+        </span>
+        <span className="muted small">{why}</span>
+      </div>
+      <div className="small muted">
+        {t.altitudeM.toFixed(0)} m · {t.speedMps.toFixed(0)} m/s · {t.headingDeg.toFixed(0)}° ·{" "}
+        {Math.round(t.likelihood * 100)}% drone
+      </div>
+      <div className="popup-actions" role="group" aria-label={`Mark ${t.radarTrackId}`}>
+        <button
+          type="button"
+          className={`small ${t.marking === "ENEMY" ? "on-enemy" : ""}`}
+          aria-pressed={t.marking === "ENEMY"}
+          disabled={disabled}
+          onClick={() => mark("ENEMY")}
+        >
+          Enemy
+        </button>
+        <button
+          type="button"
+          className={`small ${t.marking === "FRIENDLY" ? "on-friendly" : ""}`}
+          aria-pressed={t.marking === "FRIENDLY"}
+          disabled={disabled}
+          onClick={() => mark("FRIENDLY")}
+        >
+          Friend
+        </button>
+        {t.marking !== null && (
+          <button
+            type="button"
+            className="link small"
+            disabled={disabled}
+            onClick={() => mark(null)}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

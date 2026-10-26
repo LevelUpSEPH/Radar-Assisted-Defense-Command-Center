@@ -1,7 +1,7 @@
 // UI channel between a Shot Control (weapon) server and its operator page.
 // Private to this program; messages are { type, payload }.
 
-import type { LatLon, PayloadOf, RejectReason, ToCommandCenter } from "@tdts/shared";
+import type { LatLon, PayloadOf, RejectReason, SystemTrack, ToCommandCenter } from "@tdts/shared";
 import { z } from "zod";
 
 /** Where this weapon stands with the Command Center. */
@@ -39,6 +39,8 @@ export interface WeaponPageState {
   engagement: {
     engagementId: string;
     trackId: string;
+    /** The target as the Command Center last described it. */
+    track: SystemTrack;
     /** Set once told to fire: when it shoots and where the shell lands. */
     solution: { fireAt: number; impactAt: number; impactPoint: LatLon; distanceM: number } | null;
   } | null;

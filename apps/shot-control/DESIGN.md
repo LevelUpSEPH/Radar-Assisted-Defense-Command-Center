@@ -1,6 +1,6 @@
 # Shot Control — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 5 in progress**: piece 1 (registers with its device key and a key entered on its page, heartbeats, reconnects, status page with range rings) and piece 2 (state machine, firing solution, status reports; the Command Center shows each weapon's state and ammo) done. Next: engagements, in which the Command Center sends prepare and fire.
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 5 in progress**: piece 1 (registers with its device key and a key entered on its page, heartbeats, reconnects, status page with range rings) and piece 2 (state machine, firing solution, status reports; the Command Center shows each weapon's state and ammo) done. Piece 3 (engagements: the Command Center sends prepare and fire; the page and map show the assigned target) done. Next: range editing.
 
 A Shot Control is one mortar-like weapon. When the Command Center tells it to prepare, it gets ready (busy), reports ready, and on `fire` computes its own firing solution and fires where the target will be. A computed shot always hits (ideal test scene), so shells are not simulated anywhere. Then it reloads (busy) and is available again. Many Shot Controls run at once, one process each.
 
@@ -100,7 +100,7 @@ Min and max range can be changed from the weapon's own UI or from the Command Ce
 - **Ammo** remaining.
 - **Engagement:** id, target track, current solution (fire time, impact point, distance).
 - **Range editor:** min/max inputs with apply.
-- **Small map:** weapon position, min/max range rings, target and aim point.
+- **Small map:** weapon position, min/max range rings; the target the Command Center assigned (dead-reckoned from its last report, with a 60 s heading line and a line from the weapon); the aim point once told to fire; the shell on its way after the shot.
 - **Registration state** and connections, as in the Radar Center.
 
 ---

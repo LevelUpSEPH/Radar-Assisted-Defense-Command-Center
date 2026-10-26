@@ -149,6 +149,7 @@ export class Weapon {
         ? {
             engagementId: this.engagement.id,
             trackId: this.engagement.track.trackId,
+            track: this.engagement.track,
             solution: this.engagement.solution,
           }
         : null,

@@ -12,6 +12,8 @@ const ConfigFileSchema = z.object({
   dataFile: z.string().default("../apps/command-center/data/state.json"),
   /** Enemy tracks at or above this drone likelihood are engageable (DESIGN.md §5). */
   minLikelihoodToEngage: z.number().min(0).max(1).default(0.6),
+  /** How fire control starts: "approval" (operator approves each shot) or "auto". */
+  fireMode: z.enum(["auto", "approval"]).default("approval"),
 });
 export type Config = z.infer<typeof ConfigFileSchema>;
 

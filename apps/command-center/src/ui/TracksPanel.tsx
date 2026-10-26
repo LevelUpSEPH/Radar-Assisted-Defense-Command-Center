@@ -1,5 +1,14 @@
 import type { Iff } from "@tdts/shared";
-import type { SystemTrackView, UiToServer } from "../protocol";
+import type { EngagementState, EngagementView, SystemTrackView, UiToServer } from "../protocol";
+import { engagementText, useNow } from "./EngagementsPanel";
+
+const ACTIVE_STATES: readonly EngagementState[] = [
+  "PREPARING",
+  "AWAITING_APPROVAL",
+  "FIRING",
+  "IN_FLIGHT",
+  "CONFIRMING",
+];
 import { IFF_STYLE, likelihoodLabel } from "./track-style";
 
 const POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -17,15 +26,20 @@ function byThreat(a: SystemTrackView, b: SystemTrackView): number {
 
 export function TracksPanel({
   tracks,
+  engagements,
   minLikelihoodToEngage,
   disabled,
   send,
 }: {
   tracks: SystemTrackView[];
+  engagements: EngagementView[];
   minLikelihoodToEngage: number;
   disabled: boolean;
   send(msg: UiToServer): void;
 }) {
+  const now = useNow();
+  const engagementOf = (trackId: string) =>
+    engagements.find((e) => e.trackId === trackId && ACTIVE_STATES.includes(e.state));
   const engageable = tracks.filter((t) => t.engageable).length;
   return (
     <section>
@@ -41,6 +55,8 @@ export function TracksPanel({
             <TrackRow
               key={t.trackId}
               track={t}
+              engagement={engagementOf(t.trackId)}
+              now={now}
               minLikelihoodToEngage={minLikelihoodToEngage}
               disabled={disabled}
               send={send}
@@ -54,11 +70,15 @@ export function TracksPanel({
 
 function TrackRow({
   track: t,
+  engagement,
+  now,
   minLikelihoodToEngage,
   disabled,
   send,
 }: {
   track: SystemTrackView;
+  engagement: EngagementView | undefined;
+  now: number;
   minLikelihoodToEngage: number;
   disabled: boolean;
   send(msg: UiToServer): void;
@@ -76,6 +96,11 @@ function TrackRow({
           <strong>{t.trackId}</strong>
           {t.engageable && <span className="badge-engageable">Engageable</span>}
         </span>
+        {engagement && (
+          <span className="small engaged-by">
+            {engagement.weaponUnitId}: {engagementText(engagement, now)}
+          </span>
+        )}
         <span className="small">
           {t.altitudeM.toFixed(0)} m · {t.speedMps.toFixed(0)} m/s · {t.headingDeg.toFixed(0)}°{" "}
           {compass(t.headingDeg)}

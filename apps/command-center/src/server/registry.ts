@@ -96,6 +96,14 @@ export class Registry {
     return conn?.kind === "registered" ? conn.unitId : null;
   }
 
+  /** The connection a registered unit is on right now, if it's online. */
+  connectionOfUnit(unitId: string): string | null {
+    for (const [id, c] of this.connections) {
+      if (c.kind === "registered" && c.unitId === unitId) return id;
+    }
+    return null;
+  }
+
   /** Whether a registered unit is a radar or a weapon. */
   unitTypeOf(unitId: string): UnitRecord["unitType"] | null {
     return this.units.get(unitId)?.unitType ?? null;

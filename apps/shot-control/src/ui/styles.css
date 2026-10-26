@@ -603,3 +603,77 @@ code.fingerprint {
   background: #a855f7;
   transition: width 0.2s linear;
 }
+
+/* ---------------------------------------------------------------- map popups */
+
+.track-popup .leaflet-popup-content-wrapper,
+.track-popup .leaflet-popup-tip {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.track-popup .leaflet-popup-content {
+  margin: 10px 12px;
+  min-width: 210px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.track-popup a.leaflet-popup-close-button {
+  color: var(--muted);
+}
+
+.popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.popup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.popup-actions button.small,
+.popup-engagement button.small {
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+.popup-actions button {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+.popup-actions button.on-enemy {
+  background: color-mix(in srgb, #ef4444 25%, transparent);
+  border-color: #ef4444;
+}
+
+.popup-actions button.on-friendly {
+  background: color-mix(in srgb, #60a5fa 25%, transparent);
+  border-color: #60a5fa;
+}
+
+.popup-actions button.on-unknown {
+  background: color-mix(in srgb, #facc15 20%, transparent);
+  border-color: #facc15;
+}
+
+.popup-engagement {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: #c4b5fd;
+}

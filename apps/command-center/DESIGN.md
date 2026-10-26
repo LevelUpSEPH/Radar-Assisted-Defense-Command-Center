@@ -1,6 +1,6 @@
 # Command Center — Design
 
-Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) piece 3 (units register with keys, heartbeats, units list and map markers), piece 4 (approve or reject pending units) and piece 5 (device keys) done. Milestone 4: radars' tracks arrive, are fused into system tracks and classified (radar reports, operator override, engageability).
+Part of [TDTS](../../docs/DESIGN.md). Status: **milestone 3 in progress**: piece 1 (map), piece 2 (generate, list and delete keys, saved to `dataFile`) piece 3 (units register with keys, heartbeats, units list and map markers), piece 4 (approve or reject pending units) and piece 5 (device keys) done. Milestone 4: radars' tracks arrive, are fused into system tracks and classified (radar reports, operator override, engageability). Milestone 5: engagements (weapon assignment, prepare and fire with the fire-mode switch, kill confirmation through the radars) done.
 
 The Command Center is the brain of the network. It registers radars and weapons, builds one picture of the sky from all radar reports, decides what is an enemy, and tells weapons when to prepare and fire. It never sees ground truth and **never connects to the World Simulator**: everything it knows comes from radar and weapon reports.
 
@@ -128,7 +128,7 @@ Every system track has `classification`: `UNKNOWN` | `FRIENDLY` | `ENEMY`.
   1. `FRIENDLY` if **at least one** linked radar reports it friendly;
   2. otherwise `ENEMY` if any linked radar reports it enemy;
   3. otherwise `UNKNOWN`.
-- **Override:** the operator can set the classification in the tracks list (Friend / Enemy / Unknown; **Use radar reports** clears it). Once overridden, radar reports are shown but no longer change it, until the operator clears the override. Overriding to `ENEMY` is the only way to engage a track that a radar reports as friendly.
+- **Override:** the operator can set the classification by clicking the track on the map (a popup) or in the tracks list (Friend / Enemy / Unknown; **Use radar reports** clears it). Once overridden, radar reports are shown but no longer change it, until the operator clears the override. Overriding to `ENEMY` is the only way to engage a track that a radar reports as friendly.
 - **Engagement:** only `ENEMY` tracks with `likelihood ≥ minLikelihoodToEngage` (config, default 0.6) are engaged. Such tracks are marked **Engageable** (list badge, ring on the map) and sorted first; an enemy below the threshold says so.
 - **Cancellation:** if a track stops being an engageable enemy while an engagement has not fired yet, the engagement is cancelled.
 
@@ -149,7 +149,7 @@ Every `PLANNING_INTERVAL_MS` (1 s):
 1. Take the engageable enemy tracks in priority order.
 2. For each track with fewer than `maxWeaponsPerTarget` active engagements, look at every registered, online weapon that is `IDLE` (or `READY` without an engagement) and has ammo. Pick the one with the **earliest impact time**.
 3. Create an engagement and send `prepare`. Since a computed shot always hits, a second weapon is only assigned when the first engagement is lost (cancelled, `fireFailed`, weapon offline or revoked). Whether to also assign backups up front is **open**.
-4. A weapon has at most one engagement at a time.
+4. A weapon has at most one engagement at a time. A track confirmed destroyed is never engaged again, even while fusion still holds it for a few seconds after the radars lose it.
 5. While an engagement is active, the weapon gets a `trackUpdate` every time the track updates.
 
 ### Engagement life cycle
@@ -185,11 +185,12 @@ The weapon reports the shot, the Command Center tells the radar, the radar repor
 
 ## 10. Operator UI (port 7101)
 
-- **Map:** radars (with range circles), weapons (min/max range rings, state, ammo), system tracks (colored by classification, with heading vector and predicted intercept point), shots in flight (launch point → aim point, with arrival countdown).
+- **Map:** radars (with range circles), weapons (min/max range rings, state, ammo), system tracks (colored by classification, with heading vector), the weapon → target line while an engagement waits, shots in flight (launch point → aim point, with the shell moving along it). Only points are clickable; areas and lines let clicks through.
+- **Track popup (click a track):** classification and who decided it, Enemy / Friend / Unknown and **Use radar reports**, and the track's engagement with **Approve** / **Reject** when it awaits approval.
 - **Keys panel:** generate (auto or manual with name + approximate position), list with status, copy, delete (with confirmation), revoke.
 - **Units panel:** online/offline/pending, approve/reject pending units.
 - **Tracks panel (done):** system tracks, engageable enemies first: classification and who decided it, engageability, altitude/speed/heading, likelihood, which radars see it (with each radar's report), override controls.
-- **Engagements panel:** state, weapon, target, approve/reject; fire-mode switch.
+- **Engagements panel (done):** fire-mode switch; active engagements with state, weapon, target, countdowns, Approve / Reject / Call off; recent ones folded away.
 - **Weapon panel:** edit a weapon's ranges (`setRanges`).
 
 ---
