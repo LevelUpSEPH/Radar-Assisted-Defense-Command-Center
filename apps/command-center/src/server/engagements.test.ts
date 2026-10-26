@@ -139,13 +139,87 @@ describe("fire control", () => {
     ).toEqual(["WPN-01:fire"]);
   });
 
-  it("the operator can reject: the weapon is told to stand down", () => {
+  it("knows where the shell is expected to meet the target, until the shot", () => {
+    const e = new Engagements("auto");
+    const { id } = prepared(e);
+    const predicted = e.view()[0]!.predicted!;
+    // Ready after 8 s; the drone comes into 15 km reach and is met on its way south.
+    expect(predicted.impactAt).toBeGreaterThan(T0 + 8_000);
+    expect(predicted.impactPoint.lat).toBeGreaterThan(site.lat);
+    e.onWeaponStatus("WPN-01", status({ state: "READY", engagementId: id }), T0 + 8_000);
+    e.onShotFired(
+      "WPN-01",
+      { engagementId: id, firedAt: T0, impactAt: T0 + 1, impactPoint: site },
+      T0,
+    );
+    expect(e.view()[0]!.predicted).toBeNull();
+  });
+});
+
+describe("stop, restart, resume", () => {
+  it("stop (or reject) stands the weapon down and holds the target until resumed", () => {
     const e = new Engagements("approval");
     const { id } = prepared(e);
     e.onWeaponStatus("WPN-01", status({ state: "READY", engagementId: id }), T0 + 8_000);
-    expect(types(e.reject(id, T0 + 9_000))).toEqual(["WPN-01:cancel"]);
-    expect(e.view()[0]).toMatchObject({ state: "CANCELLED", reason: "rejected by operator" });
+    expect(types(e.stop(id, T0 + 9_000))).toEqual(["WPN-01:cancel"]);
+    expect(e.view()[0]).toMatchObject({ state: "CANCELLED", reason: "stopped by operator" });
     expect(() => e.approve(id, T0 + 9_000)).toThrow();
+    // Held: a free weapon doesn't take it.
+    expect(e.heldTracks()).toEqual(["S-0001"]);
+    expect(e.plan(T0 + 10_000, [enemy()], [weapon("WPN-01")])).toEqual([]);
+    e.resume("S-0001");
+    expect(types(e.plan(T0 + 11_000, [enemy()], [weapon("WPN-01")]))).toEqual(["WPN-01:prepare"]);
+  });
+
+  it("restart prepares the same weapon again from the beginning", () => {
+    const e = new Engagements("approval");
+    const { id } = prepared(e);
+    const cmds = e.restart(
+      id,
+      T0 + 5_000,
+      [enemy()],
+      [weapon("WPN-01", { state: "PREPARING", engagementId: id })],
+    );
+    expect(types(cmds)).toEqual(["WPN-01:cancel", "WPN-01:prepare"]);
+    const [next] = e.view();
+    expect(next).toMatchObject({ engagementId: "E-0002", state: "PREPARING", trackId: "S-0001" });
+    expect(next!.readyAt).toBe(T0 + 5_000 + 8_000);
+    expect(e.heldTracks()).toEqual([]);
+  });
+
+  it("too late once the shot is fired", () => {
+    const e = new Engagements("auto");
+    const { id } = prepared(e);
+    e.onWeaponStatus("WPN-01", status({ state: "READY", engagementId: id }), T0 + 8_000);
+    e.onShotFired(
+      "WPN-01",
+      { engagementId: id, firedAt: T0 + 20_000, impactAt: T0 + 60_000, impactPoint: site },
+      T0 + 20_000,
+    );
+    expect(() => e.stop(id, T0 + 21_000)).toThrow("already fired");
+    expect(() => e.restart(id, T0 + 21_000, [enemy()], [weapon("WPN-01")])).toThrow(
+      "already fired",
+    );
+  });
+
+  it("the weapon's own operator can stop it, or ask to restart", () => {
+    const e = new Engagements("auto");
+    const { id } = prepared(e);
+    expect(
+      types(
+        e.onRestartRequested(
+          "WPN-01",
+          id,
+          T0 + 3_000,
+          [enemy()],
+          [weapon("WPN-01", { state: "PREPARING", engagementId: id })],
+        ),
+      ),
+    ).toEqual(["WPN-01:cancel", "WPN-01:prepare"]);
+    e.onWeaponStopped("WPN-01", "E-0002", T0 + 4_000);
+    expect(e.view()[0]).toMatchObject({ engagementId: "E-0002", state: "CANCELLED" });
+    expect(e.view()[0]!.reason).toBe("stopped at WPN-01");
+    expect(e.heldTracks()).toEqual(["S-0001"]);
   });
 });
 

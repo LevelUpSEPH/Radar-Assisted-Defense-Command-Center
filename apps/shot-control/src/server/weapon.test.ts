@@ -75,7 +75,7 @@ describe("Weapon", () => {
     const now = T0 + 8_000;
     expect(w.fire("E-1", now)).toEqual([]);
     expect(w.status().state).toBe("FIRING");
-    const fireAt = w.details().engagement!.solution!.fireAt;
+    const fireAt = w.details(T0 + 9_000).engagement!.solution!.fireAt;
 
     const events = runUntil(w, now, now + 120_000);
     const shot = events.find((e) => e.type === "shotFired");
@@ -128,10 +128,10 @@ describe("Weapon", () => {
     w.prepare("E-1", inbound(), T0);
     w.tick(T0 + 8_000);
     w.fire("E-1", T0 + 8_000);
-    const before = w.details().engagement!.solution!.impactPoint;
+    const before = w.details(T0 + 9_000).engagement!.solution!.impactPoint;
     // The target turned: newer data moves the aim point.
     w.updateTrack("E-1", { ...inbound(T0 + 9_000), headingDeg: 200 }, T0 + 9_000);
-    const after = w.details().engagement!.solution!.impactPoint;
+    const after = w.details(T0 + 9_000).engagement!.solution!.impactPoint;
     expect(distanceM(before, after)).toBeGreaterThan(100);
   });
 
@@ -161,6 +161,22 @@ describe("Weapon", () => {
     longer.setRanges({ minRangeM: 1_000, maxRangeM: 20_000 });
     expect(longer.status()).toMatchObject({ minRangeM: 1_000, maxRangeM: 20_000 });
     expect(fireAt8s(longer)).toEqual(["shotFired"]);
+  });
+
+  it("shows where the shot is expected to hit before it's told to fire", () => {
+    const w = new Weapon(spec);
+    w.prepare("E-1", inbound(), T0);
+    const expected = w.details(T0).engagement!;
+    expect(expected.solution).toBeNull();
+    expect(expected.predicted!.distanceM).toBeLessThanOrEqual(15_000);
+    w.tick(T0 + 8_000);
+    w.fire("E-1", T0 + 8_000);
+    const aimed = w.details(T0 + 8_000).engagement!;
+    expect(aimed.predicted).toBeNull();
+    // Nothing changed about the target: the aim point is where it was expected.
+    expect(distanceM(aimed.solution!.impactPoint, expected.predicted!.impactPoint)).toBeLessThan(
+      50,
+    );
   });
 
   it("refuses ranges where min isn't below max", () => {

@@ -98,9 +98,9 @@ Min and max range can be changed from the weapon's own UI or from the Command Ce
 
 - **State badge:** IDLE / BUSY (PREPARING, FIRING, RELOADING) / READY / EMPTY, with a progress bar for prepare and reload.
 - **Ammo** remaining.
-- **Engagement:** id, target track, current solution (fire time, impact point, distance).
+- **Engagement:** id, target track, the expected hit (when and how far out, before `fire`), then the solution (fire time, impact point, distance); **Stop** and **Restart** until the shot (see the Command Center design, §8).
 - **Range editor:** **Change** next to the range opens min/max inputs in km, checked before **Apply**.
-- **Small map:** weapon position, min/max range rings; the target the Command Center assigned (dead-reckoned from its last report, with a 60 s heading line and a line from the weapon); the aim point once told to fire; the shell on its way after the shot.
+- **Small map:** weapon position, min/max range rings; the target the Command Center assigned (dead-reckoned from its last report, with a 60 s heading line and a line from the weapon); the target's path up to where the shell meets it, with the hit point (dashed ring while only expected, solid once told to fire); the shell on its way after the shot.
 - **Registration state** and connections, as in the Radar Center.
 
 ---

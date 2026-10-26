@@ -165,7 +165,7 @@ export class Weapon {
   }
 
   /** For the operator's page: the engagement in progress and the last shot. */
-  details() {
+  details(now: number) {
     return {
       busy: BUSY_STATES.includes(this.state),
       engagement: this.engagement
@@ -174,6 +174,7 @@ export class Weapon {
             trackId: this.engagement.track.trackId,
             track: this.engagement.track,
             solution: this.engagement.solution,
+            predicted: this.engagement.solution ? null : this.predict(now),
           }
         : null,
       lastShot: this.lastShot,
@@ -182,19 +183,20 @@ export class Weapon {
 
   // ------------------------------------------------------------- internals
 
+  /** Before `fire`: where the shell would meet the target once this weapon is ready. */
+  private predict(now: number): InterceptSolution | null {
+    const e = this.engagement!;
+    const readyAt = this.state === "PREPARING" && this.until !== null ? this.until : now;
+    return findEarliestIntercept({ ...this.spec, ...this.current }, e.track, { now, readyAt });
+  }
+
   /** (Re)computes the firing solution; no solution means the target is out of reach. */
   private aim(now: number): WeaponEvent[] {
     const e = this.engagement!;
-    e.solution = findEarliestIntercept(
-      { ...this.spec, ...this.current },
-      {
-        position: e.track.position,
-        speedMps: e.track.speedMps,
-        headingDeg: e.track.headingDeg,
-        observedAt: e.track.observedAt,
-      },
-      { now, readyAt: now },
-    );
+    e.solution = findEarliestIntercept({ ...this.spec, ...this.current }, e.track, {
+      now,
+      readyAt: now,
+    });
     if (e.solution) return [];
     // Can't reach it: stay ready, and let the Command Center decide.
     this.state = "READY";

@@ -88,6 +88,7 @@ async function main() {
     minLikelihoodToEngage: config.minLikelihoodToEngage,
     fireMode: engagements.fireMode,
     engagements: engagements.view(),
+    heldTracks: engagements.heldTracks(),
   });
 
   let ui: UiServer | null = null;
@@ -113,6 +114,28 @@ async function main() {
     onFireFailed: (unitId, report) => {
       console.log(`[engage] ${unitId} can't fire ${report.engagementId}: ${report.reason}`);
       execute(engagements.onFireFailed(unitId, report.engagementId, report.reason, Date.now()));
+      ui?.publish();
+    },
+    onEngagementStopped: (unitId, engagementId) => {
+      console.log(`[engage] ${unitId}'s operator stopped ${engagementId}`);
+      engagements.onWeaponStopped(unitId, engagementId, Date.now());
+      ui?.publish();
+    },
+    onRestartRequested: (unitId, engagementId) => {
+      console.log(`[engage] ${unitId}'s operator restarts ${engagementId}`);
+      try {
+        execute(
+          engagements.onRestartRequested(
+            unitId,
+            engagementId,
+            Date.now(),
+            fusion.view(),
+            onlineWeapons(),
+          ),
+        );
+      } catch (err) {
+        console.warn(`[engage] can't restart ${engagementId}: ${(err as Error).message}`);
+      }
       ui?.publish();
     },
     onKillReport: (unitId, report) => {
@@ -163,9 +186,19 @@ async function main() {
         execute(engagements.approve(msg.payload.engagementId, Date.now()));
         console.log(`[engage] operator approved ${msg.payload.engagementId}`);
         break;
-      case "rejectEngagement":
-        execute(engagements.reject(msg.payload.engagementId, Date.now()));
-        console.log(`[engage] operator rejected ${msg.payload.engagementId}`);
+      case "stopEngagement":
+        execute(engagements.stop(msg.payload.engagementId, Date.now()));
+        console.log(`[engage] operator stopped ${msg.payload.engagementId}`);
+        break;
+      case "restartEngagement":
+        execute(
+          engagements.restart(msg.payload.engagementId, Date.now(), fusion.view(), onlineWeapons()),
+        );
+        console.log(`[engage] operator restarted ${msg.payload.engagementId}`);
+        break;
+      case "resumeTrack":
+        engagements.resume(msg.payload.trackId);
+        console.log(`[engage] operator resumed ${msg.payload.trackId}`);
         break;
       case "setWeaponRanges": {
         const { unitId, minRangeM, maxRangeM } = msg.payload;

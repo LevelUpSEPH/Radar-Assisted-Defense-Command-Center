@@ -34,6 +34,10 @@ export interface UnitServerEvents {
   onShotFired(unitId: string, shot: PayloadOf<ToCommandCenter, "shotFired">): void;
   /** A registered weapon couldn't fire. */
   onFireFailed(unitId: string, report: PayloadOf<ToCommandCenter, "fireFailed">): void;
+  /** A registered weapon's operator stopped its engagement. */
+  onEngagementStopped(unitId: string, engagementId: string): void;
+  /** A registered weapon's operator asked to restart its preparation. */
+  onRestartRequested(unitId: string, engagementId: string): void;
   /** A registered radar answered a kill check. */
   onKillReport(unitId: string, report: PayloadOf<ToCommandCenter, "killReport">): void;
   /** A registered weapon reported its status. */
@@ -121,7 +125,9 @@ export function startUnitServer(
         }
         case "status":
         case "shotFired":
-        case "fireFailed": {
+        case "fireFailed":
+        case "engagementStopped":
+        case "restartRequested": {
           const unitId = registry.unitOn(connId);
           if (!unitId) return sendError(ws, "NOT_REGISTERED", `register before ${msg.type}`);
           if (registry.unitTypeOf(unitId) !== "weapon") {
@@ -129,6 +135,12 @@ export function startUnitServer(
           }
           if (msg.type === "status") return events.onWeaponStatus(unitId, msg.payload);
           if (msg.type === "shotFired") return events.onShotFired(unitId, msg.payload);
+          if (msg.type === "engagementStopped") {
+            return events.onEngagementStopped(unitId, msg.payload.engagementId);
+          }
+          if (msg.type === "restartRequested") {
+            return events.onRestartRequested(unitId, msg.payload.engagementId);
+          }
           return events.onFireFailed(unitId, msg.payload);
         }
         case "killReport": {

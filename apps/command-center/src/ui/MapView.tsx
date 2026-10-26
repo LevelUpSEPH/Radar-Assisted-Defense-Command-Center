@@ -26,7 +26,7 @@ import type {
   UiToServer,
   UnitView,
 } from "../protocol";
-import { engagementText, useNow } from "./EngagementsPanel";
+import { EngagementControls, engagementText, useNow } from "./EngagementsPanel";
 import { IFF_ORDER, IFF_STYLE } from "./track-style";
 import { liveRanges } from "./UnitsPanel";
 
@@ -46,6 +46,7 @@ export function MapView({
   units,
   tracks,
   engagements,
+  heldTracks,
   disabled,
   send,
 }: {
@@ -53,6 +54,7 @@ export function MapView({
   units: UnitView[];
   tracks: SystemTrackView[];
   engagements: EngagementView[];
+  heldTracks: string[];
   disabled: boolean;
   send(msg: UiToServer): void;
 }) {
@@ -77,6 +79,7 @@ export function MapView({
           key={t.trackId}
           track={t}
           engagement={activeEngagement(t.trackId)}
+          held={heldTracks.includes(t.trackId)}
           disabled={disabled}
           send={send}
         />
@@ -165,11 +168,13 @@ const ACTIVE_STATES: readonly EngagementState[] = [
 function SystemTrackMarker({
   track: t,
   engagement,
+  held,
   disabled,
   send,
 }: {
   track: SystemTrackView;
   engagement: EngagementView | undefined;
+  held: boolean;
   disabled: boolean;
   send(msg: UiToServer): void;
 }) {
@@ -215,7 +220,13 @@ function SystemTrackMarker({
           seen by {t.sources.map((s) => `${s.unitId} ${s.radarTrackId}`).join(", ")}
         </Tooltip>
         <Popup className="track-popup" autoPanPadding={[16, 16]}>
-          <TrackActions track={t} engagement={engagement} disabled={disabled} send={send} />
+          <TrackActions
+            track={t}
+            engagement={engagement}
+            held={held}
+            disabled={disabled}
+            send={send}
+          />
         </Popup>
       </CircleMarker>
     </>
@@ -226,11 +237,13 @@ function SystemTrackMarker({
 function TrackActions({
   track: t,
   engagement,
+  held,
   disabled,
   send,
 }: {
   track: SystemTrackView;
   engagement: EngagementView | undefined;
+  held: boolean;
   disabled: boolean;
   send(msg: UiToServer): void;
 }) {
@@ -277,39 +290,25 @@ function TrackActions({
           <span>
             {engagement.engagementId} · {engagement.weaponUnitId}: {engagementText(engagement, now)}
           </span>
-          {engagement.state === "AWAITING_APPROVAL" && (
-            <span className="decision">
-              <button
-                type="button"
-                className="approve small"
-                disabled={disabled}
-                onClick={() =>
-                  send({
-                    type: "approveEngagement",
-                    payload: { engagementId: engagement.engagementId },
-                  })
-                }
-              >
-                Approve
-              </button>
-              <button
-                type="button"
-                className="danger small"
-                disabled={disabled}
-                onClick={() =>
-                  send({
-                    type: "rejectEngagement",
-                    payload: { engagementId: engagement.engagementId },
-                  })
-                }
-              >
-                Reject
-              </button>
-            </span>
-          )}
+          <EngagementControls engagement={engagement} disabled={disabled} send={send} />
         </div>
       )}
-      {!engagement && t.engageable && (
+      {held && (
+        <div className="popup-engagement small">
+          <span>Held: stopped by the operator, not engaged until resumed.</span>
+          <span className="decision">
+            <button
+              type="button"
+              className="small"
+              disabled={disabled}
+              onClick={() => send({ type: "resumeTrack", payload: { trackId: t.trackId } })}
+            >
+              Resume
+            </button>
+          </span>
+        </div>
+      )}
+      {!engagement && !held && t.engageable && (
         <div className="small muted">Engageable; waiting for a free weapon.</div>
       )}
     </div>
@@ -344,19 +343,28 @@ function EngagementOverlay({
         if (!from) return null;
         if (["PREPARING", "AWAITING_APPROVAL", "FIRING"].includes(e.state)) {
           const to = trackAt.get(e.trackId);
-          return to ? (
-            <Polyline
-              key={e.engagementId}
-              positions={[toLatLng(from), toLatLng(to)]}
-              pathOptions={{
-                color: WEAPON_COLOR,
-                weight: 1,
-                opacity: 0.7,
-                dashArray: "2 6",
-                ...quiet,
-              }}
-            />
-          ) : null;
+          if (!to) return null;
+          return (
+            <Fragment key={e.engagementId}>
+              <Polyline
+                positions={[toLatLng(from), toLatLng(to)]}
+                pathOptions={{
+                  color: WEAPON_COLOR,
+                  weight: 1,
+                  opacity: 0.7,
+                  dashArray: "2 6",
+                  ...quiet,
+                }}
+              />
+              {e.predicted && (
+                <HitPoint
+                  target={to}
+                  hit={e.predicted.impactPoint}
+                  label={`${e.engagementId} · ${e.weaponUnitId} meets ${e.trackId} here in ${Math.max(0, (e.predicted.impactAt - now) / 1000).toFixed(0)} s`}
+                />
+              )}
+            </Fragment>
+          );
         }
         if ((e.state === "IN_FLIGHT" || e.state === "CONFIRMING") && e.shot) {
           const { firedAt, impactAt, impactPoint } = e.shot;
@@ -405,6 +413,38 @@ function EngagementOverlay({
 }
 
 /**
+ * Where the shell is expected to meet the target: the target's path up to that
+ * point, and a crosshair-like ring on it.
+ */
+function HitPoint({ target, hit, label }: { target: LatLon; hit: LatLon; label: string }) {
+  return (
+    <>
+      <Polyline
+        positions={[toLatLng(target), toLatLng(hit)]}
+        pathOptions={{ color: SHELL_COLOR, weight: 2, opacity: 0.8, interactive: false }}
+      />
+      <CircleMarker
+        center={toLatLng(hit)}
+        radius={8}
+        pathOptions={{ color: SHELL_COLOR, weight: 2, fillColor: SHELL_COLOR, fillOpacity: 0.15 }}
+      >
+        <Tooltip>{label}</Tooltip>
+      </CircleMarker>
+      <CircleMarker
+        center={toLatLng(hit)}
+        radius={2}
+        pathOptions={{
+          color: SHELL_COLOR,
+          fillColor: SHELL_COLOR,
+          fillOpacity: 1,
+          interactive: false,
+        }}
+      />
+    </>
+  );
+}
+
+/**
  * Starts on the configured view, then frames the units' coverage the first
  * time any units are known, so the operator sees where the radars look without
  * hunting for them. Only once each: after that the operator pans freely.
@@ -437,6 +477,7 @@ function Legend() {
     ["Radar (range)", RADAR_COLOR],
     ["Weapon (min/max range)", WEAPON_COLOR],
     ["Offline", OFFLINE_COLOR],
+    ["Expected hit point / shell", SHELL_COLOR],
   ];
   return (
     <div className="legend leaflet-bottom leaflet-left">

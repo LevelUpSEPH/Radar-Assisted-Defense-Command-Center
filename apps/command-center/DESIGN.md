@@ -156,7 +156,7 @@ Every `PLANNING_INTERVAL_MS` (1 s):
 
 ```
 PREPARING → READY → AWAITING_APPROVAL → FIRING → IN_FLIGHT → CONFIRMING → KILL | UNCONFIRMED
-     └──────────┴───────────┴──────────────┴─→ CANCELLED (reclassified, track lost, weapon offline/revoked, rejected)
+     └──────────┴───────────┴──────────────┴─→ CANCELLED (reclassified, track lost, weapon offline/revoked, stopped, restarted)
 ```
 
 `AWAITING_APPROVAL` exists only in `approval` fire mode. `FIRING` covers the time between `fire` and the shot (the weapon waits for its fire time). `IN_FLIGHT` lasts until the shell's arrival time. A `fireFailed` returns the engagement to `READY` for the next planning cycle to decide.
@@ -168,6 +168,19 @@ PREPARING → READY → AWAITING_APPROVAL → FIRING → IN_FLIGHT → CONFIRMIN
 - `fireMode: auto` → `fire` is sent as soon as the weapon reports `READY`.
 - `fireMode: approval` → the engagement waits on the map with **Approve** and **Reject** buttons.
 - The switch can be flipped live in the UI.
+
+### Stop, restart, resume
+
+Until the shot is fired (`PREPARING`, `AWAITING_APPROVAL`, `FIRING`), the operator can:
+
+- **Stop** (called **Reject** while awaiting approval): the weapon is told to `cancel`, and the target is **held**: the planner doesn't engage it again, with any weapon, until the operator clicks **Resume** (map popup or the Held list). A hold ends by itself when the track disappears.
+- **Restart:** the engagement ends and the same weapon gets a new one for the same target (`cancel`, then `prepare`): preparation starts over from zero.
+
+The weapon's own operator can do the same from its page: **Stop** stands the weapon down at once (even without the Command Center) and reports `engagementStopped`, which holds the target here; **Restart** sends `restartRequested`, and the Command Center restarts as above. Once fired, it's too late: both are refused.
+
+### Expected hit point
+
+Before the shot, every planning cycle the Command Center works out where the weapon's shell would meet the target (`findEarliestIntercept`, with the weapon ready at the end of its preparation, or now if ready), and shows it on the map; after the shot, the weapon's reported impact point takes over.
 
 ---
 
@@ -185,12 +198,12 @@ The weapon reports the shot, the Command Center tells the radar, the radar repor
 
 ## 10. Operator UI (port 7101)
 
-- **Map:** radars (with range circles), weapons (min/max range rings, state, ammo), system tracks (colored by classification, with heading vector), the weapon → target line while an engagement waits, shots in flight (launch point → aim point, with the shell moving along it). Only points are clickable; areas and lines let clicks through.
-- **Track popup (click a track):** classification and who decided it, Enemy / Friend / Unknown and **Use radar reports**, and the track's engagement with **Approve** / **Reject** when it awaits approval.
+- **Map:** radars (with range circles), weapons (min/max range rings, state, ammo), system tracks (colored by classification, with heading vector), the weapon → target line while an engagement waits, the expected hit point with the target's path to it, shots in flight (launch point → aim point, with the shell moving along it). Only points are clickable; areas and lines let clicks through.
+- **Track popup (click a track):** classification and who decided it, Enemy / Friend / Unknown and **Use radar reports**, and the track's engagement with **Approve** / **Reject** when it awaits approval, **Stop** / **Restart** before the shot, and **Resume** for a held track.
 - **Keys panel:** generate (auto or manual with name + approximate position), list with status, copy, delete (with confirmation), revoke.
 - **Units panel:** online/offline/pending, approve/reject pending units.
 - **Tracks panel (done):** system tracks, engageable enemies first: classification and who decided it, engageability, altitude/speed/heading, likelihood, which radars see it (with each radar's report), override controls.
-- **Engagements panel (done):** fire-mode switch; active engagements with state, weapon, target, countdowns, Approve / Reject / Call off; recent ones folded away.
+- **Engagements panel (done):** fire-mode switch; active engagements with state, weapon, target, countdowns, Approve / Reject, Stop, Restart; held targets with Resume; recent ones folded away. The tracks list marks held targets **Held**.
 - **Weapon ranges (done):** **Change ranges** on an online weapon in the Units tab sends `setRanges`. The list, the map rings and the planner use the ranges the weapon last reported in its `status`. On the map, the inside of the min range ring is shaded: too close to hit.
 
 ---

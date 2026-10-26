@@ -6,6 +6,10 @@
 //                              ↘ (auto fire mode) ────────────↗
 //   FIRING → (shotFired) → IN_FLIGHT → (shell arrives) → CONFIRMING → KILL | UNCONFIRMED
 //   Before the shot, anything can end in CANCELLED.
+//
+// The operator (here or at the weapon) can stop an engagement before the shot:
+// its target is then held, not engaged again until the operator resumes it.
+// Restarting ends the engagement and prepares the same weapon again from zero.
 
 import {
   createMessage,
@@ -56,6 +60,8 @@ interface Engagement {
   since: number;
   readyAt: number | null;
   shot: PayloadOf<ToCommandCenter, "shotFired"> | null;
+  /** Before the shot: where and when the shell is expected to meet the target. */
+  predicted: { impactAt: number; impactPoint: LatLon } | null;
   /** The radar tracks behind the target, kept so the kill can be confirmed even if the track is gone. */
   sources: TrackSource[];
   /** Radars asked to confirm, and whether any said "destroyed". */
@@ -87,6 +93,26 @@ export const systemTrackOf = (t: SystemTrackView): SystemTrack => ({
   observedAt: t.observedAt,
 });
 
+/** Where the weapon's shell would meet the track, if the weapon is ready at `readyAt`. */
+function predict(
+  weapon: WeaponInfo,
+  track: SystemTrackView,
+  now: number,
+  readyAt: number | null,
+): Engagement["predicted"] {
+  const solution = findEarliestIntercept(
+    {
+      position: weapon.position,
+      minRangeM: weapon.status.minRangeM,
+      maxRangeM: weapon.status.maxRangeM,
+      shellSpeedMps: weapon.shellSpeedMps,
+    },
+    track,
+    { now, readyAt: Math.max(now, readyAt ?? now) },
+  );
+  return solution ? { impactAt: solution.impactAt, impactPoint: solution.impactPoint } : null;
+}
+
 export class Engagements {
   private readonly all = new Map<string, Engagement>();
   private counter = 0;
@@ -97,6 +123,8 @@ export class Engagements {
    * the radars lose it; it must not be engaged again in that time.
    */
   private readonly killed = new Set<string>();
+  /** Tracks the operator stopped: not engaged again until resumed. */
+  private readonly held = new Set<string>();
 
   constructor(public fireMode: FireMode) {}
 
@@ -110,14 +138,15 @@ export class Engagements {
   plan(now: number, tracks: readonly SystemTrackView[], weapons: readonly WeaponInfo[]): Command[] {
     const commands: Command[] = [];
     const trackById = new Map(tracks.map((t) => [t.trackId, t]));
-    const online = new Set(weapons.map((w) => w.unitId));
+    const weaponById = new Map(weapons.map((w) => [w.unitId, w]));
 
     for (const e of this.active()) {
       const track = trackById.get(e.trackId);
       if (track) e.sources = track.sources;
 
       if (BEFORE_SHOT.includes(e.state)) {
-        if (!online.has(e.weaponUnitId)) {
+        const weapon = weaponById.get(e.weaponUnitId);
+        if (!weapon) {
           this.end(e, "CANCELLED", now, "weapon went offline");
           continue;
         }
@@ -126,6 +155,7 @@ export class Engagements {
           this.end(e, "CANCELLED", now, track ? "no longer an engageable enemy" : "track lost");
           continue;
         }
+        e.predicted = predict(weapon, track, now, e.state === "PREPARING" ? e.readyAt : now);
         // Keep the weapon aimed with the latest fused track.
         commands.push({
           to: e.weaponUnitId,
@@ -154,6 +184,7 @@ export class Engagements {
     for (const [pair, until] of this.failedPairs) if (until <= now) this.failedPairs.delete(pair);
     const present = new Set(tracks.map((t) => t.trackId));
     for (const id of this.killed) if (!present.has(id)) this.killed.delete(id);
+    for (const id of this.held) if (!present.has(id)) this.held.delete(id);
     const engagedTracks = new Set(this.active().map((e) => e.trackId));
     const busyWeapons = new Set(this.active().map((e) => e.weaponUnitId));
     const free = weapons.filter(
@@ -167,7 +198,12 @@ export class Engagements {
     // Every possible (track, weapon) pairing with its earliest impact time.
     const options: { track: SystemTrackView; weapon: WeaponInfo; impactAt: number }[] = [];
     for (const track of tracks) {
-      if (!track.engageable || engagedTracks.has(track.trackId) || this.killed.has(track.trackId)) {
+      if (
+        !track.engageable ||
+        engagedTracks.has(track.trackId) ||
+        this.killed.has(track.trackId) ||
+        this.held.has(track.trackId)
+      ) {
         continue;
       }
       for (const weapon of free) {
@@ -194,26 +230,33 @@ export class Engagements {
       if (taken.has(track.trackId) || taken.has(weapon.unitId)) continue;
       taken.add(track.trackId);
       taken.add(weapon.unitId);
-      const e: Engagement = {
-        id: `E-${String(++this.counter).padStart(4, "0")}`,
-        trackId: track.trackId,
-        weaponUnitId: weapon.unitId,
-        state: "PREPARING",
-        createdAt: now,
-        since: now,
-        readyAt: now + weapon.prepareTimeS * 1000,
-        shot: null,
-        sources: track.sources,
-        asked: new Set(),
-        reason: null,
-      };
-      this.all.set(e.id, e);
-      commands.push({
-        to: weapon.unitId,
-        msg: msg("prepare", { engagementId: e.id, track: systemTrackOf(track) }),
-      });
+      commands.push(this.start(track, weapon, now));
     }
     return commands;
+  }
+
+  /** A new engagement: the weapon starts preparing for the track. */
+  private start(track: SystemTrackView, weapon: WeaponInfo, now: number): Command {
+    const readyAt = now + weapon.prepareTimeS * 1000;
+    const e: Engagement = {
+      id: `E-${String(++this.counter).padStart(4, "0")}`,
+      trackId: track.trackId,
+      weaponUnitId: weapon.unitId,
+      state: "PREPARING",
+      createdAt: now,
+      since: now,
+      readyAt,
+      shot: null,
+      predicted: predict(weapon, track, now, readyAt),
+      sources: track.sources,
+      asked: new Set(),
+      reason: null,
+    };
+    this.all.set(e.id, e);
+    return {
+      to: weapon.unitId,
+      msg: msg("prepare", { engagementId: e.id, track: systemTrackOf(track) }),
+    };
   }
 
   // ------------------------------------------------------------- what the units report
@@ -232,6 +275,7 @@ export class Engagements {
     const e = this.all.get(shot.engagementId);
     if (!e || e.weaponUnitId !== unitId || e.state !== "FIRING") return;
     e.shot = shot;
+    e.predicted = null;
     this.move(e, "IN_FLIGHT", now);
   }
 
@@ -271,15 +315,62 @@ export class Engagements {
     return this.fire(e, now);
   }
 
-  reject(engagementId: string, now: number): Command[] {
-    const e = this.all.get(engagementId);
-    if (!e || !BEFORE_SHOT.includes(e.state))
-      throw new Error(`${engagementId} can't be rejected now`);
-    this.end(e, "CANCELLED", now, "rejected by operator");
+  /** Calls off an engagement before the shot and holds its target until resumed. */
+  stop(engagementId: string, now: number): Command[] {
+    const e = this.beforeShot(engagementId, "stopped");
+    this.end(e, "CANCELLED", now, "stopped by operator");
+    this.held.add(e.trackId);
     return [this.cancelCommand(e)];
   }
 
+  /** The same weapon prepares again for the same target, from the beginning. */
+  restart(
+    engagementId: string,
+    now: number,
+    tracks: readonly SystemTrackView[],
+    weapons: readonly WeaponInfo[],
+  ): Command[] {
+    const e = this.beforeShot(engagementId, "restarted");
+    const track = tracks.find((t) => t.trackId === e.trackId && t.engageable);
+    const weapon = weapons.find((w) => w.unitId === e.weaponUnitId);
+    if (!track) throw new Error(`${e.trackId} is no longer an engageable enemy`);
+    if (!weapon) throw new Error(`${e.weaponUnitId} is offline`);
+    this.end(e, "CANCELLED", now, "restarted by operator");
+    return [this.cancelCommand(e), this.start(track, weapon, now)];
+  }
+
+  /** A held target may be engaged again. */
+  resume(trackId: string): void {
+    if (!this.held.delete(trackId)) throw new Error(`${trackId} isn't held`);
+  }
+
+  /** The weapon's own operator stopped it (the weapon has already stood down). */
+  onWeaponStopped(unitId: string, engagementId: string, now: number): void {
+    const e = this.all.get(engagementId);
+    if (!e || e.weaponUnitId !== unitId || !BEFORE_SHOT.includes(e.state)) return;
+    this.end(e, "CANCELLED", now, `stopped at ${unitId}`);
+    this.held.add(e.trackId);
+  }
+
+  /** The weapon's own operator asked to start preparing again. */
+  onRestartRequested(
+    unitId: string,
+    engagementId: string,
+    now: number,
+    tracks: readonly SystemTrackView[],
+    weapons: readonly WeaponInfo[],
+  ): Command[] {
+    const e = this.all.get(engagementId);
+    if (!e || e.weaponUnitId !== unitId) return [];
+    return this.restart(engagementId, now, tracks, weapons);
+  }
+
   // ------------------------------------------------------------- read model
+
+  /** Tracks the operator stopped, waiting to be resumed. */
+  heldTracks(): string[] {
+    return [...this.held];
+  }
 
   /** Active engagements (oldest first), then the most recent finished ones. */
   view(): EngagementView[] {
@@ -294,6 +385,7 @@ export class Engagements {
       shot: e.shot
         ? { firedAt: e.shot.firedAt, impactAt: e.shot.impactAt, impactPoint: e.shot.impactPoint }
         : null,
+      predicted: BEFORE_SHOT.includes(e.state) ? e.predicted : null,
       reason: e.reason,
     });
     const all = [...this.all.values()];
@@ -308,6 +400,16 @@ export class Engagements {
 
   private active(): Engagement[] {
     return [...this.all.values()].filter((e) => ACTIVE.includes(e.state));
+  }
+
+  private beforeShot(engagementId: string, what: string): Engagement {
+    const e = this.all.get(engagementId);
+    if (!e) throw new Error(`unknown engagement ${engagementId}`);
+    if (!BEFORE_SHOT.includes(e.state)) {
+      const why = e.shot ? "the shot is already fired" : "it has ended";
+      throw new Error(`${engagementId} can't be ${what}: ${why}`);
+    }
+    return e;
   }
 
   private fire(e: Engagement, now: number): Command[] {

@@ -165,6 +165,10 @@ export const ToCommandCenterSchema = z.discriminatedUnion("type", [
     z.object({ engagementId: Id, firedAt: EpochMs, impactAt: EpochMs, impactPoint: LatLonSchema }),
   ),
   message("fireFailed", z.object({ engagementId: Id, reason: z.string() })),
+  /** The weapon's operator stopped the engagement; the weapon has already stood down. */
+  message("engagementStopped", z.object({ engagementId: Id })),
+  /** The weapon's operator wants to prepare again from the beginning. */
+  message("restartRequested", z.object({ engagementId: Id })),
 ]);
 
 // ---------------------------------------------------------------- Command Center -> unit

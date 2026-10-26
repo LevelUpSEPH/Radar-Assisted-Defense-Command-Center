@@ -27,12 +27,15 @@ function byThreat(a: SystemTrackView, b: SystemTrackView): number {
 export function TracksPanel({
   tracks,
   engagements,
+  heldTracks,
   minLikelihoodToEngage,
   disabled,
   send,
 }: {
   tracks: SystemTrackView[];
   engagements: EngagementView[];
+  /** Stopped by the operator: not engaged until resumed. */
+  heldTracks: string[];
   minLikelihoodToEngage: number;
   disabled: boolean;
   send(msg: UiToServer): void;
@@ -56,6 +59,7 @@ export function TracksPanel({
               key={t.trackId}
               track={t}
               engagement={engagementOf(t.trackId)}
+              held={heldTracks.includes(t.trackId)}
               now={now}
               minLikelihoodToEngage={minLikelihoodToEngage}
               disabled={disabled}
@@ -71,6 +75,7 @@ export function TracksPanel({
 function TrackRow({
   track: t,
   engagement,
+  held,
   now,
   minLikelihoodToEngage,
   disabled,
@@ -78,6 +83,7 @@ function TrackRow({
 }: {
   track: SystemTrackView;
   engagement: EngagementView | undefined;
+  held: boolean;
   now: number;
   minLikelihoodToEngage: number;
   disabled: boolean;
@@ -94,7 +100,14 @@ function TrackRow({
         <span>
           <span className="iff-dot" style={{ background: style.color }} />
           <strong>{t.trackId}</strong>
-          {t.engageable && <span className="badge-engageable">Engageable</span>}
+          {t.engageable &&
+            (held ? (
+              <span className="badge-held" title="Stopped by the operator; resume it to engage">
+                Held
+              </span>
+            ) : (
+              <span className="badge-engageable">Engageable</span>
+            ))}
         </span>
         {engagement && (
           <span className="small engaged-by">

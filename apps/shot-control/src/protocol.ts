@@ -18,6 +18,8 @@ export type LinkStatus =
   | { state: "rejected"; reason: RejectReason; detail?: string }
   | { state: "revoked" };
 
+type Solution = { fireAt: number; impactAt: number; impactPoint: LatLon; distanceM: number };
+
 export interface WeaponPageState {
   name: string;
   position: LatLon;
@@ -43,7 +45,9 @@ export interface WeaponPageState {
     /** The target as the Command Center last described it. */
     track: SystemTrack;
     /** Set once told to fire: when it shoots and where the shell lands. */
-    solution: { fireAt: number; impactAt: number; impactPoint: LatLon; distanceM: number } | null;
+    solution: Solution | null;
+    /** Until told to fire: where the shell would meet the target once ready. */
+    predicted: Solution | null;
   } | null;
   lastShot: PayloadOf<ToCommandCenter, "shotFired"> | null;
 }
@@ -59,5 +63,9 @@ export const UiToServerSchema = z.discriminatedUnion("type", [
     type: z.literal("setRanges"),
     payload: z.object({ minRangeM: z.number(), maxRangeM: z.number() }),
   }),
+  /** The operator stops the current engagement before the shot. */
+  z.object({ type: z.literal("stopEngagement"), payload: z.object({}) }),
+  /** The operator wants the current preparation to start over. */
+  z.object({ type: z.literal("restartEngagement"), payload: z.object({}) }),
 ]);
 export type UiToServer = z.infer<typeof UiToServerSchema>;

@@ -143,6 +143,8 @@ Every message uses one envelope:
 | weapon → CC   | `status`                  | state, ammo, ranges, engagementId, stateUntil                   |
 | weapon → CC   | `shotFired`               | engagementId, firedAt, impactAt, impactPoint                    |
 | weapon → CC   | `fireFailed`              | engagementId, reason                                            |
+| weapon → CC   | `engagementStopped`       | engagementId (the weapon's operator stopped it)                 |
+| weapon → CC   | `restartRequested`        | engagementId (the weapon's operator wants to prepare again)     |
 | radar → world | `hello`                   | radarId, position, rangeM                                       |
 | radar → world | `scan` → `scanResult`     | position, rangeM → observedAt, detections                       |
 | radar → world | `targetHit`               | truthId (remove the object a weapon hit)                        |

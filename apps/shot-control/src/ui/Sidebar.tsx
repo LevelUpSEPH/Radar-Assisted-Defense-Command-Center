@@ -51,7 +51,14 @@ export function Sidebar({ weapon }: { weapon: WeaponSocket }) {
             </ul>
           </section>
 
-          <WeaponPanel state={state} />
+          <WeaponPanel
+            state={state}
+            disabled={!connected}
+            send={(msg) => {
+              clearError();
+              send(msg);
+            }}
+          />
 
           <section>
             <h2>This weapon</h2>

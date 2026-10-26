@@ -113,12 +113,14 @@ export function Sidebar({ cc }: { cc: CommandSocket }) {
             <EngagementsPanel
               engagements={engagements}
               fireMode={state?.fireMode ?? "approval"}
+              heldTracks={state?.heldTracks ?? []}
               disabled={!connected}
               send={send}
             />
             <TracksPanel
               tracks={tracks}
               engagements={engagements}
+              heldTracks={state?.heldTracks ?? []}
               minLikelihoodToEngage={state?.minLikelihoodToEngage ?? 0.6}
               disabled={!connected}
               send={send}

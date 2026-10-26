@@ -165,6 +165,8 @@ export const EngagementViewSchema = z.object({
   shot: z
     .object({ firedAt: z.number(), impactAt: z.number(), impactPoint: LatLonSchema })
     .nullable(),
+  /** Before the shot: where and when the shell is expected to meet the target. */
+  predicted: z.object({ impactAt: z.number(), impactPoint: LatLonSchema }).nullable(),
   /** CANCELLED / UNCONFIRMED: why. */
   reason: z.string().nullable(),
 });
@@ -183,6 +185,8 @@ export const CommandStateSchema = z.object({
   fireMode: FireModeSchema,
   /** Active engagements, then the most recent finished ones. */
   engagements: z.array(EngagementViewSchema),
+  /** Tracks the operator stopped: not engaged until resumed. */
+  heldTracks: z.array(z.string()),
 });
 export type CommandState = z.infer<typeof CommandStateSchema>;
 
@@ -203,10 +207,18 @@ export const UiToServerSchema = z.discriminatedUnion("type", [
     type: z.literal("approveEngagement"),
     payload: z.object({ engagementId: z.string() }),
   }),
+  /** Call off before the shot (also "Reject"); the target is held until resumed. */
   z.object({
-    type: z.literal("rejectEngagement"),
+    type: z.literal("stopEngagement"),
     payload: z.object({ engagementId: z.string() }),
   }),
+  /** The same weapon prepares again for the same target, from the beginning. */
+  z.object({
+    type: z.literal("restartEngagement"),
+    payload: z.object({ engagementId: z.string() }),
+  }),
+  /** A held target may be engaged again. */
+  z.object({ type: z.literal("resumeTrack"), payload: z.object({ trackId: z.string() }) }),
   /** The operator overrides a track's classification; null hands it back to the radars. */
   z.object({
     type: z.literal("classifyTrack"),

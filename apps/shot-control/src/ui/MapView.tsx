@@ -111,7 +111,8 @@ function Assignment({ state }: { state: WeaponPageState }) {
         <TargetMarker
           track={engagement.track}
           from={position}
-          aimPoint={engagement.solution?.impactPoint ?? null}
+          hit={engagement.solution ?? engagement.predicted}
+          aimed={engagement.solution !== null}
           label={`${engagement.trackId} (${engagement.engagementId})`}
           now={now}
         />
@@ -159,16 +160,21 @@ function Assignment({ state }: { state: WeaponPageState }) {
 function TargetMarker({
   track,
   from,
-  aimPoint,
+  hit,
+  aimed,
   label,
   now,
 }: {
   track: SystemTrack;
   from: LatLon;
-  aimPoint: LatLon | null;
+  /** Where the shell meets the target: the fire solution, or the expected one before `fire`. */
+  hit: { impactAt: number; impactPoint: LatLon } | null;
+  /** Told to fire: this is the aim point, not just an expectation. */
+  aimed: boolean;
   label: string;
   now: number;
 }) {
+  const aimPoint = hit?.impactPoint ?? null;
   // Where the target is now, dead-reckoned from the Command Center's last report.
   const here = extrapolate(
     track.position,
@@ -187,7 +193,7 @@ function TargetMarker({
         positions={[toLatLng(here), toLatLng(ahead)]}
         pathOptions={{ color: TARGET_COLOR, weight: 1.5, opacity: 0.8, dashArray: "5 5", ...quiet }}
       />
-      {aimPoint && (
+      {hit && aimPoint && (
         <>
           <Polyline
             positions={[toLatLng(from), toLatLng(aimPoint)]}
@@ -199,10 +205,32 @@ function TargetMarker({
               ...quiet,
             }}
           />
+          {/* The target's path up to where the shell meets it. */}
+          <Polyline
+            positions={[toLatLng(here), toLatLng(aimPoint)]}
+            pathOptions={{ color: SHELL_COLOR, weight: 2, opacity: 0.8, ...quiet }}
+          />
           <CircleMarker
             center={toLatLng(aimPoint)}
             radius={8}
-            pathOptions={{ color: SHELL_COLOR, weight: 1.5, fillOpacity: 0, ...quiet }}
+            pathOptions={{
+              color: SHELL_COLOR,
+              weight: 2,
+              fillColor: SHELL_COLOR,
+              fillOpacity: 0.15,
+              dashArray: aimed ? undefined : "3 3",
+            }}
+          >
+            <Tooltip>
+              {aimed ? "Aim point" : "Expected hit"}: the shell meets {track.trackId} here in{" "}
+              {Math.max(0, (hit.impactAt - now) / 1000).toFixed(0)} s,{" "}
+              {(distanceM(from, aimPoint) / 1000).toFixed(1)} km out
+            </Tooltip>
+          </CircleMarker>
+          <CircleMarker
+            center={toLatLng(aimPoint)}
+            radius={2}
+            pathOptions={{ color: SHELL_COLOR, fillColor: SHELL_COLOR, fillOpacity: 1, ...quiet }}
           />
         </>
       )}
@@ -216,10 +244,11 @@ function TargetMarker({
           <br />
           {track.altitudeM.toFixed(0)} m · {track.speedMps.toFixed(0)} m/s ·{" "}
           {track.headingDeg.toFixed(0)}°
-          {aimPoint && (
+          {aimPoint && hit && (
             <>
               <br />
-              aim point {(distanceM(from, aimPoint) / 1000).toFixed(1)} km out
+              {aimed ? "aimed" : "expected hit"} in{" "}
+              {Math.max(0, (hit.impactAt - now) / 1000).toFixed(0)} s
             </>
           )}
         </Tooltip>
@@ -244,7 +273,7 @@ function Legend() {
   const items: [string, string][] = [
     ["Can hit (min–max range)", WEAPON_COLOR],
     ["Assigned target", TARGET_COLOR],
-    ["Aim point / shell", SHELL_COLOR],
+    ["Hit point (dashed: expected) / shell", SHELL_COLOR],
   ];
   return (
     <div className="legend leaflet-bottom leaflet-left">

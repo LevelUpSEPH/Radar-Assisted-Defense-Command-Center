@@ -1,6 +1,6 @@
 import { BUSY_STATES, type WeaponState } from "@tdts/shared";
 import { useEffect, useState } from "react";
-import type { WeaponPageState } from "../protocol";
+import type { UiToServer, WeaponPageState } from "../protocol";
 
 const STATE_TEXT: Record<WeaponState, { label: string; tone: string; explain: string }> = {
   IDLE: { label: "Idle", tone: "pill-ok", explain: "Available. Waiting for the Command Center." },
@@ -23,7 +23,18 @@ function useNow(intervalMs = 200): number {
 
 const seconds = (ms: number) => `${Math.max(0, ms / 1000).toFixed(1)} s`;
 
-export function WeaponPanel({ state }: { state: WeaponPageState }) {
+/** Before the shot, the operator can still stop or restart. */
+const STOPPABLE: readonly WeaponState[] = ["PREPARING", "READY", "FIRING"];
+
+export function WeaponPanel({
+  state,
+  disabled,
+  send,
+}: {
+  state: WeaponPageState;
+  disabled: boolean;
+  send(msg: UiToServer): void;
+}) {
   const now = useNow();
   const { status, engagement, lastShot } = state;
   const text = STATE_TEXT[status.state];
@@ -72,6 +83,15 @@ export function WeaponPanel({ state }: { state: WeaponPageState }) {
                 <dd>
                   {engagement.engagementId} · target {engagement.trackId}
                 </dd>
+                {engagement.predicted && (
+                  <>
+                    <dt>Expected hit</dt>
+                    <dd>
+                      in {seconds(engagement.predicted.impactAt - now)},{" "}
+                      {(engagement.predicted.distanceM / 1000).toFixed(1)} km out
+                    </dd>
+                  </>
+                )}
                 {engagement.solution && (
                   <>
                     <dt>Fires in</dt>
@@ -98,6 +118,29 @@ export function WeaponPanel({ state }: { state: WeaponPageState }) {
               </>
             )}
           </dl>
+
+          {engagement && STOPPABLE.includes(status.state) && (
+            <span className="decision">
+              <button
+                type="button"
+                className="danger small"
+                disabled={disabled}
+                title="Stand down now; the Command Center holds the target until its operator resumes it"
+                onClick={() => send({ type: "stopEngagement", payload: {} })}
+              >
+                Stop
+              </button>
+              <button
+                type="button"
+                className="small"
+                disabled={disabled}
+                title="Prepare again from the beginning"
+                onClick={() => send({ type: "restartEngagement", payload: {} })}
+              >
+                Restart
+              </button>
+            </span>
+          )}
         </div>
       </div>
     </section>

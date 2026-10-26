@@ -13,6 +13,7 @@ export function App() {
           units={cc.state?.units ?? []}
           tracks={cc.state?.tracks ?? []}
           engagements={cc.state?.engagements ?? []}
+          heldTracks={cc.state?.heldTracks ?? []}
           disabled={!cc.connected}
           send={cc.send}
         />

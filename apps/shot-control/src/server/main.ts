@@ -151,6 +151,10 @@ async function main() {
 
   const ticker = setInterval(() => step(() => weapon.tick(Date.now())), TICK_MS);
   const statusTimer = setInterval(reportStatus, HEARTBEAT_INTERVAL_MS);
+  // While engaged, refresh the page every second: the expected hit point moves with time.
+  const pageTimer = setInterval(() => {
+    if (weapon.status().engagementId) ui?.publish();
+  }, 1_000);
 
   const state = (): WeaponPageState => ({
     name: config.name,
@@ -165,7 +169,7 @@ async function main() {
     registrationKey: key,
     link: link.status(),
     status: weapon.status(),
-    ...weapon.details(),
+    ...weapon.details(Date.now()),
   });
 
   const onUiCommand = async (msg: UiToServer) => {
@@ -185,6 +189,34 @@ async function main() {
         // Refused ranges throw, and the page shows why.
         step(() => applyRanges(msg.payload, "the operator"));
         break;
+      case "stopEngagement": {
+        // Stand down right here, even if the Command Center can't be reached;
+        // then tell it, so it holds the target.
+        const id = weapon.status().engagementId;
+        if (!id) throw new Error("There is no engagement to stop.");
+        step(() => weapon.cancel(id));
+        console.log(`[weapon] operator stopped ${id}`);
+        report(
+          createMessage<ToCommandCenter, "engagementStopped">("engagementStopped", {
+            engagementId: id,
+          }),
+        );
+        break;
+      }
+      case "restartEngagement": {
+        // The Command Center runs engagements: it cancels this one and sends a new prepare.
+        const id = weapon.status().engagementId;
+        if (!id) throw new Error("There is no engagement to restart.");
+        if (!link.unitId()) throw new Error("The Command Center can't be reached right now.");
+        if (weapon.status().state === "RELOADING") throw new Error("Too late: the shot is fired.");
+        console.log(`[weapon] operator asks to restart ${id}`);
+        report(
+          createMessage<ToCommandCenter, "restartRequested">("restartRequested", {
+            engagementId: id,
+          }),
+        );
+        break;
+      }
     }
     ui?.publish();
   };
@@ -193,6 +225,7 @@ async function main() {
   const shutdown = async () => {
     clearInterval(ticker);
     clearInterval(statusTimer);
+    clearInterval(pageTimer);
     link.close();
     await ui?.close();
     process.exit(0);
