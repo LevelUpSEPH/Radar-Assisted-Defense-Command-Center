@@ -94,6 +94,7 @@ TDTS/
 ├─ apps/command-center/    Command Center (server + operator UI)
 ├─ apps/radar-center/      Radar Center (client + IFF UI)
 ├─ apps/shot-control/      Shot Control (client + weapon UI)
+├─ apps/launcher/          `npm run scenario`: starts a whole scenario
 └─ scenario/
    ├─ world-sim.json       World Simulator config
    ├─ waves/*.json         incoming waves
@@ -102,7 +103,7 @@ TDTS/
    └─ command-center.json
 ```
 
-A root script (`npm run scenario`, milestone 7) starts the World Simulator, the Command Center, and one process per radar and weapon config file, so a whole demo starts with one command.
+`npm run scenario` (optionally `-- --dir path/to/scenario`) starts a whole demo with one command. It reads the scenario folder, checks that the configs are readable and no two programs share a port, and refuses to start if a port is already taken (TDTS already running). It starts the World Simulator and the Command Center first, then, once they accept connections, one process per radar and weapon config file. Every line a program prints is prefixed with its name (`world`, `cc`, or the config file's name, e.g. `north`). When everything is up, it lists each program's page. Ctrl+C stops them all. Units remember their registration key, so after the first run (generate a key in the Command Center, enter it on each unit's page) a scenario comes up fully registered.
 
 ---
 
@@ -162,11 +163,11 @@ Each milestone ends with something you can run and watch.
 
 1. ✅ **Foundation:** monorepo, `shared` package (types, zod schemas, geo utils, earliest-intercept search, key generation, with unit tests), lint and format.
 2. ✅ **World Simulator:** loads waves, moves targets, answers radar scans, removes hit targets, truth map UI with wave controls.
-3. **Command Center registry:** key generation, auto and manual registration, heartbeats, revocation, units panel, persistence.
-4. **Radar Center:** registers, scans, adds noise, computes speed, heading and likelihood, IFF UI. The Command Center fuses tracks and shows them on its map.
-5. **Shot Control:** registers, state machine, UI, range editing from both sides, ammo and reload.
-6. **Engagement:** threat ranking, assignment, prepare/fire/cancel, approval switch, kill confirmation, re-engagement.
-7. **Scenario runner and polish:** the `npm run scenario` launcher, a sample scenario (several radars and weapons, mixed waves), a README.
+3. ✅ **Command Center registry:** key generation, auto and manual registration, heartbeats, revocation, units panel, persistence.
+4. ✅ **Radar Center:** registers, scans, adds noise, computes speed, heading and likelihood, IFF UI. The Command Center fuses tracks and shows them on its map.
+5. ✅ **Shot Control:** registers, state machine, UI, range editing from both sides, ammo and reload.
+6. ✅ **Engagement:** threat ranking, assignment, prepare/fire/cancel, approval switch, kill confirmation, re-engagement.
+7. **Scenario runner and polish** (launcher done): the `npm run scenario` launcher, a sample scenario (several radars and weapons, mixed waves), a README.
 
 ---
 
