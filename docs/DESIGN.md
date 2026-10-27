@@ -167,7 +167,7 @@ Each milestone ends with something you can run and watch.
 4. ✅ **Radar Center:** registers, scans, adds noise, computes speed, heading and likelihood, IFF UI. The Command Center fuses tracks and shows them on its map.
 5. ✅ **Shot Control:** registers, state machine, UI, range editing from both sides, ammo and reload.
 6. ✅ **Engagement:** threat ranking, assignment, prepare/fire/cancel, approval switch, kill confirmation, re-engagement.
-7. **Scenario runner and polish** (launcher done): the `npm run scenario` launcher, a sample scenario (several radars and weapons, mixed waves), a README.
+7. **Scenario runner and polish** (launcher and README done): the `npm run scenario` launcher, a sample scenario (several radars and weapons, mixed waves), a README.
 
 ---
 

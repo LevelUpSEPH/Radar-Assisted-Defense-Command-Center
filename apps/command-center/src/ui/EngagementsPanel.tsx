@@ -191,18 +191,20 @@ export function EngagementsPanel({
               key={e.engagementId}
               className={`row ${e.state === "AWAITING_APPROVAL" ? "awaiting" : ""}`}
             >
-              <div className="row-main">
-                <span>
-                  <strong>{e.engagementId}</strong>
-                  <span className="muted small">
-                    {" "}
-                    · {e.weaponUnitId} → {e.trackId}
+              <div className="row-main engagement-row">
+                <span className="engagement-head">
+                  <span>
+                    <strong>{e.engagementId}</strong>
+                    <span className="muted small">
+                      {" "}
+                      · {e.weaponUnitId} → {e.trackId}
+                    </span>
                   </span>
+                  <span className={`pill ${TONE[e.state]}`}>{e.state.replace("_", " ")}</span>
                 </span>
                 <span className="small">{engagementText(e, now)}</span>
                 <EngagementControls engagement={e} disabled={disabled} send={send} />
               </div>
-              <span className={`pill ${TONE[e.state]}`}>{e.state.replace("_", " ")}</span>
             </li>
           ))}
         </ul>

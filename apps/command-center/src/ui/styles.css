@@ -704,3 +704,25 @@ button.approve:hover:not(:disabled) {
   letter-spacing: 0.06em;
   color: var(--muted);
 }
+
+/* ---------------------------------------------------------------- engagement rows */
+
+.engagement-row {
+  flex: 1;
+}
+
+.engagement-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.decision {
+  flex-wrap: wrap;
+}
+
+.decision button {
+  white-space: nowrap;
+}
